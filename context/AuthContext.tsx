@@ -76,6 +76,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } = supabase.auth.onAuthStateChange(async (event, session) => {
             console.log("EVENT", event);
 
+            setLoading(true); // Signal that auth state is being resolved
+
             try {
                 setSession(session);
                 setUser(session?.user ?? null);

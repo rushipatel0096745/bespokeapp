@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
     View,
     Text,
@@ -19,7 +19,19 @@ export default function LoginScreen() {
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
 
-    const { signIn } = useAuth();
+    const { signIn, isAuthenticated, profile, loading: authLoading } = useAuth();
+
+    // Navigate once auth state is updated after a successful login
+    useEffect(() => {
+        if (authLoading) return; // Still resolving — wait
+        if (!isAuthenticated) return; // Not logged in — stay here
+
+        if (!profile?.completed_onboarding) {
+            router.replace("/onboarding");
+        } else {
+            router.replace("/(tabs)");
+        }
+    }, [isAuthenticated, profile, authLoading]);
 
     const handleLogin = async () => {
         if (!email.trim() || !password.trim()) {
