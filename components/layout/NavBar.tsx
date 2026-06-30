@@ -16,7 +16,7 @@ interface NavBarProps {
 }
 
 export default function NavBar({
-    variant = "logo",
+    variant,
     title,
     subtitle,
     showBackButton,

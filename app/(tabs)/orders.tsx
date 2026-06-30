@@ -1,569 +1,369 @@
-// screens/ChatScreen.tsx
-// Modern Mum Co — Proof Chat Screen
-// Replicates the WhatsApp proof sign-off flow natively
+import { View, Text, FlatList, Pressable, StyleSheet, Image } from "react-native";
+import { useRouter } from "expo-router";
 
-import React, { useState, useRef, useEffect } from "react";
-import {
-    View,
-    Text,
-    ScrollView,
-    TouchableOpacity,
-    TextInput,
-    StyleSheet,
-    StatusBar,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { colors, typography, spacing, radii, shadows, componentStyles } from "../../theme/theme";
+import { useOrders } from "@/hooks/useOrders";
+import ScreenWrapper from "@/components/layout/ScreenWrapper";
+import NavBar from "@/components/layout/NavBar";
+import { colors, typography, spacing, radii, shadows } from "@/theme/theme";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type MessageRole = "agent" | "bot" | "user";
+export type OrderWorkflowStage =
+    | "submitted"
+    | "proof_pending"
+    | "proof_sent"
+    | "changes_requested"
+    | "approved"
+    | "upsell_offered"
+    | "foiling"
+    | "dispatched"
+    | "completed";
 
-type ChatState =
-    | "awaiting_proof"
-    | "proof_delivered"
-    | "awaiting_decision"
-    | "changes_round_1"
-    | "changes_round_2"
-    | "upsell"
-    | "soft_retry"
-    | "awaiting_order_number"
-    | "complete";
-
-interface Message {
+export interface OrderImage {
     id: string;
-    role: MessageRole;
-    content: string;
-    imageUrl?: string;
-    timestamp: string;
+    image_url: string;
+    sort_order: number;
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function ChatNavBar({ babyName, ticketId, onBack }: { babyName: string; ticketId: string; onBack: () => void }) {
-    return (
-        <View style={styles.navBar}>
-            <TouchableOpacity onPress={onBack} accessibilityRole='button' accessibilityLabel='Go back'>
-                <Text style={styles.navBack}>‹</Text>
-            </TouchableOpacity>
-            <View style={styles.navTitleGroup}>
-                <Text style={styles.navTitle}>Baby {babyName}</Text>
-                <Text style={styles.navSubtitle}>#{ticketId}</Text>
-            </View>
-            <View style={styles.navStatusDot} />
-        </View>
-    );
-}
-
-function ChatBubble({ message }: { message: Message }) {
-    const isUser = message.role === "user";
-    const isBot = message.role === "bot";
-
-    const bubbleStyle = isUser
-        ? componentStyles.bubbleUser
-        : isBot
-          ? componentStyles.bubbleBot
-          : componentStyles.bubbleAgent;
-
-    const textStyle = isUser ? componentStyles.bubbleTextUser : componentStyles.bubbleTextAgent;
-
-    return (
-        <View style={[styles.bubbleRow, isUser && styles.bubbleRowRight]}>
-            {!isUser && (
-                <View style={[styles.bubbleAvatar, isBot && styles.bubbleAvatarBot]}>
-                    <Text style={styles.bubbleAvatarText}>{isBot ? "✦" : "A"}</Text>
-                </View>
-            )}
-            <View style={[bubbleStyle, styles.bubbleMaxWidth]}>
-                {message.imageUrl && (
-                    <View style={styles.proofImageContainer}>
-                        <Image
-                            source={{ uri: message.imageUrl }}
-                            style={styles.proofImage}
-                            resizeMode='cover'
-                            accessibilityLabel='Proof image'
-                        />
-                        <Text style={styles.proofTapHint}>Tap to view full screen</Text>
-                    </View>
-                )}
-                <Text style={textStyle}>{message.content}</Text>
-                <Text style={[styles.timestamp, isUser && styles.timestampUser]}>{message.timestamp}</Text>
-            </View>
-        </View>
-    );
-}
-
-function QuickReplies({ chatState, onAction }: { chatState: ChatState; onAction: (action: string) => void }) {
-    const replies: { label: string; action: string; variant: "default" | "gold" }[] = [];
-
-    if (chatState === "proof_delivered" || chatState === "awaiting_decision") {
-        replies.push(
-            { label: "All ok", action: "all_ok", variant: "gold" },
-            { label: "Make changes", action: "make_changes", variant: "default" }
-        );
-    } else if (chatState === "changes_round_2") {
-        replies.push(
-            { label: "All ok", action: "all_ok", variant: "gold" },
-            { label: "More changes", action: "more_changes", variant: "default" }
-        );
-    } else if (chatState === "upsell") {
-        replies.push(
-            { label: "Yes please", action: "upsell_yes", variant: "gold" },
-            { label: "No thanks", action: "upsell_no", variant: "default" }
-        );
-    } else if (chatState === "soft_retry") {
-        replies.push(
-            { label: "OK, yes!", action: "retry_yes", variant: "gold" },
-            { label: "No thank you", action: "retry_no", variant: "default" }
-        );
-    }
-
-    if (replies.length === 0) return null;
-
-    return (
-        <View style={styles.quickReplyRow}>
-            {replies.map((r) => (
-                <TouchableOpacity
-                    key={r.action}
-                    style={r.variant === "gold" ? componentStyles.quickReplyGold : componentStyles.quickReply}
-                    onPress={() => onAction(r.action)}
-                    activeOpacity={0.7}
-                    accessibilityRole='button'>
-                    <Text
-                        style={
-                            r.variant === "gold" ? componentStyles.quickReplyGoldText : componentStyles.quickReplyText
-                        }>
-                        {r.label}
-                    </Text>
-                </TouchableOpacity>
-            ))}
-        </View>
-    );
-}
-
-function ChatInput({ chatState, onSend }: { chatState: ChatState; onSend: (text: string) => void }) {
-    const [text, setText] = useState("");
-
-    // Only show free-text input for change feedback and order number entry
-    const showInput =
-        chatState === "changes_round_1" || chatState === "changes_round_2" || chatState === "awaiting_order_number";
-
-    if (!showInput) return null;
-
-    const placeholder =
-        chatState === "awaiting_order_number"
-            ? "Paste your order number here..."
-            : "Describe the changes you'd like...";
-
-    const handleSend = () => {
-        if (text.trim().length === 0) return;
-        onSend(text.trim());
-        setText("");
+export interface Order {
+    id: string;
+    user_id: string;
+    website_order_id: string;
+    kit_id: string;
+    status: string;
+    workflow_stage: OrderWorkflowStage;
+    zendesk_ticket_id: string | null;
+    customer_name: string | null;
+    customer_email: string | null;
+    customer_phone: string | null;
+    baby_name: string;
+    date_of_birth: string | null;
+    print_type: string;
+    frame_colour_id: string | null;
+    foil_colour_id: string | null;
+    card_colour_id: string | null;
+    special_instructions: string | null;
+    revision_count: number;
+    submitted_at: string;
+    created_at: string;
+    updated_at: string;
+    kits: {
+        id: string;
+        name: string;
     };
+    order_images: OrderImage[];
+}
 
+// ─── Status config ────────────────────────────────────────────────────────────
+
+export const ORDER_STATUS: Record<OrderWorkflowStage, { label: string; color: string; background: string; dot: string }> = {
+    submitted: { label: "Submitted", color: "#92650A", background: "#FEF3C7", dot: "#D97706" },
+    proof_pending: { label: "Proof Pending", color: "#92650A", background: "#FEF3C7", dot: "#D97706" },
+    proof_sent: { label: "Proof Ready", color: "#1D4ED8", background: "#DBEAFE", dot: "#2563EB" },
+    changes_requested: { label: "Changes Requested", color: "#9A3412", background: "#FED7AA", dot: "#EA580C" },
+    approved: { label: "Approved", color: "#15803D", background: "#DCFCE7", dot: "#16A34A" },
+    upsell_offered: { label: "Add-ons Available", color: "#6D28D9", background: "#F3E8FF", dot: "#7C3AED" },
+    foiling: { label: "Foiling", color: "#6D28D9", background: "#F3E8FF", dot: "#7C3AED" },
+    dispatched: { label: "Dispatched", color: "#1D4ED8", background: "#DBEAFE", dot: "#2563EB" },
+    completed: { label: "Completed", color: "#15803D", background: "#DCFCE7", dot: "#16A34A" },
+};
+
+// ─── StatusBadge ─────────────────────────────────────────────────────────────
+
+function StatusBadge({ stage }: { stage: OrderWorkflowStage }) {
+    const s = ORDER_STATUS[stage] ?? ORDER_STATUS.submitted;
     return (
-        <View style={styles.inputRow}>
-            <TextInput
-                style={styles.chatInput}
-                value={text}
-                onChangeText={setText}
-                placeholder={placeholder}
-                placeholderTextColor={colors.charcoalLight}
-                multiline
-                maxLength={500}
-                accessibilityLabel='Message input'
-            />
-            <TouchableOpacity
-                style={[styles.sendBtn, text.trim().length > 0 && styles.sendBtnActive]}
-                onPress={handleSend}
-                disabled={text.trim().length === 0}
-                accessibilityRole='button'
-                accessibilityLabel='Send message'>
-                <Text style={styles.sendBtnText}>Send</Text>
-            </TouchableOpacity>
+        <View style={[badge.root, { backgroundColor: s.background }]}>
+            <View style={[badge.dot, { backgroundColor: s.dot }]} />
+            <Text style={[badge.label, { color: s.color }]}>{s.label}</Text>
         </View>
     );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+const badge = StyleSheet.create({
+    root: {
+        flexDirection: "row",
+        alignItems: "center",
+        alignSelf: "flex-start",
+        paddingHorizontal: spacing.sm,
+        paddingVertical: 3,
+        borderRadius: radii.full,
+        gap: spacing.xs,
+    },
+    dot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+    },
+    label: {
+        fontFamily: typography.fonts.sansMedium,
+        fontSize: typography.sizes.xs,
+        letterSpacing: typography.letterSpacing.wide,
+    },
+});
 
-export default function ChatScreen() {
+// ─── OrderCard ────────────────────────────────────────────────────────────────
+
+function OrderCard({ order }: { order: Order }) {
     const router = useRouter();
-    const { ticketId } = useLocalSearchParams<{ ticketId: string }>();
-    const scrollRef = useRef<ScrollView>(null);
+    const thumbnail = order.order_images?.[0]?.image_url ?? null;
 
-    const [chatState, setChatState] = useState<ChatState>("proof_delivered");
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: "1",
-            role: "bot",
-            content:
-                "Thanks for submitting your prints — we've received them safely and our team is getting to work on your proof. Whilst you're waiting, why not browse our exclusive add-ons?",
-            timestamp: "2 days ago",
-        },
-        {
-            id: "2",
-            role: "agent",
-            content: "Your proof is ready to review!",
-            imageUrl: undefined, // Replace with real proof image URL from Zendesk
-            timestamp: "10:24",
-        },
-        {
-            id: "3",
-            role: "bot",
-            content: "Your proof is attached above. Please let me know if all ok to foil and dispatch.",
-            timestamp: "10:24",
-        },
-    ]);
-
-    const addMessage = (role: MessageRole, content: string, imageUrl?: string) => {
-        const newMsg: Message = {
-            id: Date.now().toString(),
-            role,
-            content,
-            imageUrl,
-            timestamp: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
-        };
-        setMessages((prev) => [...prev, newMsg]);
-        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
-    };
-
-    const handleAction = (action: string) => {
-        switch (action) {
-            case "all_ok":
-                addMessage("user", "All ok");
-                setTimeout(() => {
-                    addMessage(
-                        "bot",
-                        "Amazing! Before we foil your print, would you like to add extra copies or keyrings at a discounted price? Many families order extras for grandparents. Just a heads up — add-ons are only available before we start foiling!"
-                    );
-                    setChatState("upsell");
-                }, 600);
-                break;
-
-            case "make_changes":
-                addMessage("user", "Make changes");
-                setTimeout(() => {
-                    addMessage(
-                        "bot",
-                        "No problem at all! Please describe the changes you'd like and we'll get a new proof over to you."
-                    );
-                    setChatState("changes_round_1");
-                }, 600);
-                break;
-
-            case "more_changes":
-                addMessage("user", "More changes");
-                setTimeout(() => {
-                    addMessage(
-                        "bot",
-                        "No problem — we're happy to accommodate further amends. As a small business, it works best for us to wrap up revisions within two rounds. Please share all your final feedback in one message."
-                    );
-                    setChatState("changes_round_2");
-                }, 600);
-                break;
-
-            case "upsell_yes":
-                addMessage("user", "Yes please!");
-                setTimeout(() => {
-                    addMessage(
-                        "bot",
-                        "Great! Click below to view and add extras to your basket. Once purchased, please paste your order number here."
-                    );
-                    setChatState("awaiting_order_number");
-                }, 600);
-                break;
-
-            case "upsell_no":
-                addMessage("user", "No thanks");
-                setTimeout(() => {
-                    addMessage(
-                        "bot",
-                        "Are you sure? If you order now we can offer you a further 20% off already discounted prices using code EXTRA-20 🎁"
-                    );
-                    setChatState("soft_retry");
-                }, 600);
-                break;
-
-            case "retry_yes":
-                addMessage("user", "OK, yes!");
-                setTimeout(() => {
-                    addMessage(
-                        "bot",
-                        "Brilliant! Click below to shop add-ons with your 20% off code EXTRA-20. Once purchased, paste your order number here."
-                    );
-                    setChatState("awaiting_order_number");
-                }, 600);
-                break;
-
-            case "retry_no":
-                addMessage("user", "No thank you");
-                setTimeout(() => {
-                    addMessage(
-                        "bot",
-                        "No problem at all! We'll get your prints foiled and posted. You'll receive an email dispatch notification when your order is on its way. 💛"
-                    );
-                    setChatState("complete");
-                }, 600);
-                break;
-        }
-    };
-
-    const handleTextSend = (text: string) => {
-        if (chatState === "awaiting_order_number") {
-            addMessage("user", text);
-            setTimeout(() => {
-                addMessage(
-                    "bot",
-                    `Perfect, thank you! We've received your add-on order ${text}. We\'ll combine everything and foil all together. You\'ll receive an email when dispatched.`
-                );
-                setChatState("complete");
-            }, 600);
-        } else {
-            // Changes feedback — send to Zendesk ticket via Supabase Edge Function
-            addMessage("user", text);
-            setTimeout(() => {
-                addMessage("bot", "Got it! Our designer will review your feedback and send over a new proof shortly.");
-                setChatState("awaiting_decision");
-            }, 600);
-        }
-    };
+    const submittedDate = new Date(order.submitted_at).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+    });
 
     return (
-        <SafeAreaView style={styles.safe} edges={["top"]}>
-            <StatusBar barStyle='light-content' backgroundColor={colors.charcoal} />
+        <Pressable
+            onPress={() => router.push(`/orders/${order.id}`)}
+            style={({ pressed }) => [card.root, pressed && card.rootPressed]}>
+            {/* Thumbnail */}
+            <Image
+                source={thumbnail ? { uri: thumbnail } : require("@/assets/order-placeholder.png")}
+                style={card.thumbnail}
+            />
 
-            <ChatNavBar babyName='Ava' ticketId={ticketId ?? "BFC-2024-0441"} onBack={() => router.back()} />
+            {/* Content */}
+            <View style={card.content}>
+                {/* Kit name + baby name */}
+                <Text style={card.kitName} numberOfLines={1}>
+                    {order.kits.name}
+                </Text>
+                <Text style={card.babyName}>{order.baby_name}</Text>
 
-            <KeyboardAvoidingView
-                style={styles.flex}
-                behavior={Platform.OS === "ios" ? "padding" : undefined}
-                keyboardVerticalOffset={0}>
-                <ScrollView
-                    ref={scrollRef}
-                    style={styles.messageList}
-                    contentContainerStyle={styles.messageListContent}
-                    showsVerticalScrollIndicator={false}>
-                    {messages.map((msg) => (
-                        <ChatBubble key={msg.id} message={msg} />
-                    ))}
-                    <View style={{ height: spacing.lg }} />
-                </ScrollView>
+                {/* Status + unread dot row */}
+                <View style={card.statusRow}>
+                    <StatusBadge stage={order.workflow_stage} />
+                </View>
 
-                {/* Browse add-ons button — shown during upsell states */}
-                {(chatState === "upsell" || chatState === "soft_retry" || chatState === "awaiting_order_number") && (
-                    <TouchableOpacity
-                        style={styles.browseBtn}
-                        onPress={() => router.push("/add-ons")}
-                        activeOpacity={0.85}
-                        accessibilityRole='link'>
-                        <Text style={styles.browseBtnText}>Browse add-ons</Text>
-                    </TouchableOpacity>
-                )}
+                {/* Meta row: print type · submitted date */}
+                <View style={card.metaRow}>
+                    <Text style={card.metaText}>
+                        {order.print_type.charAt(0).toUpperCase() + order.print_type.slice(1)} print
+                    </Text>
+                    <Text style={card.metaDivider}>·</Text>
+                    <Text style={card.metaText}>{submittedDate}</Text>
+                </View>
+            </View>
 
-                <QuickReplies chatState={chatState} onAction={handleAction} />
-                <ChatInput chatState={chatState} onSend={handleTextSend} />
-            </KeyboardAvoidingView>
-        </SafeAreaView>
+            {/* Chevron */}
+            <Text style={card.chevron}>›</Text>
+        </Pressable>
     );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-    safe: {
-        flex: 1,
-        backgroundColor: colors.charcoal,
+const card = StyleSheet.create({
+    root: {
+        backgroundColor: colors.white,
+        borderRadius: radii.xl,
+        borderWidth: 0.5,
+        borderColor: colors.border,
+        padding: spacing.md,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.md,
+        ...shadows.card,
     },
-
-    flex: {
-        flex: 1,
-        backgroundColor: colors.cream,
+    rootPressed: {
+        backgroundColor: colors.creamMid,
     },
+    thumbnail: {
+        width: 68,
+        height: 68,
+        borderRadius: radii.lg,
+        backgroundColor: colors.creamMid,
+    },
+    content: {
+        flex: 1,
+        gap: spacing.xs,
+    },
+    kitName: {
+        fontFamily: typography.fonts.sansBold,
+        fontSize: typography.sizes.md,
+        color: colors.charcoal,
+    },
+    babyName: {
+        fontFamily: typography.fonts.sans,
+        fontSize: typography.sizes.sm,
+        color: colors.charcoalLight,
+    },
+    statusRow: {
+        marginTop: spacing.xs,
+    },
+    metaRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.xs,
+        marginTop: spacing.xs,
+    },
+    metaText: {
+        fontFamily: typography.fonts.sans,
+        fontSize: typography.sizes.xs,
+        color: colors.charcoalLight,
+    },
+    metaDivider: {
+        fontFamily: typography.fonts.sans,
+        fontSize: typography.sizes.xs,
+        color: colors.border,
+    },
+    chevron: {
+        fontSize: 22,
+        color: colors.charcoalLight,
+        marginLeft: spacing.xs,
+    },
+});
 
-    // Nav
-    navBar: {
-        ...componentStyles.navBar,
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function OrderCardSkeleton() {
+    return (
+        <View style={skeleton.root}>
+            <View style={skeleton.thumbnail} />
+            <View style={skeleton.content}>
+                <View style={[skeleton.line, { width: "55%" }]} />
+                <View style={[skeleton.line, { width: "35%", marginTop: spacing.xs }]} />
+                <View style={[skeleton.line, { width: "45%", marginTop: spacing.sm }]} />
+                <View style={[skeleton.line, { width: "65%", marginTop: spacing.xs }]} />
+            </View>
+        </View>
+    );
+}
+
+const skeleton = StyleSheet.create({
+    root: {
+        backgroundColor: colors.white,
+        borderRadius: radii.xl,
+        borderWidth: 0.5,
+        borderColor: colors.border,
+        padding: spacing.md,
+        flexDirection: "row",
+        alignItems: "center",
         gap: spacing.md,
     },
-
-    navBack: {
-        fontSize: typography.sizes.xxl,
-        color: colors.gold,
-        lineHeight: typography.sizes.xxl,
+    thumbnail: {
+        width: 68,
+        height: 68,
+        borderRadius: radii.lg,
+        backgroundColor: colors.creamMid,
     },
-
-    navTitleGroup: {
-        flex: 1,
+    content: { flex: 1 },
+    line: {
+        height: 13,
+        borderRadius: radii.xs,
+        backgroundColor: colors.creamMid,
     },
+});
 
-    navTitle: {
-        fontFamily: typography.fonts.sansMedium,
-        fontSize: typography.sizes.md,
-        color: colors.white,
-    },
+// ─── Empty state ──────────────────────────────────────────────────────────────
 
-    navSubtitle: {
-        fontFamily: typography.fonts.sans,
-        fontSize: typography.sizes.xs,
-        color: colors.charcoalLight,
-        marginTop: spacing.xxs,
-    },
+function EmptyState() {
+    return (
+        <View style={empty.root}>
+            <Text style={empty.emoji}>🖐️</Text>
+            <Text style={empty.heading}>No orders yet</Text>
+            <Text style={empty.body}>Upload your first print kit to get started.</Text>
+        </View>
+    );
+}
 
-    navStatusDot: {
-        width: 8,
-        height: 8,
-        borderRadius: radii.full,
-        backgroundColor: colors.success,
-    },
-
-    // Messages
-    messageList: {
-        flex: 1,
-        backgroundColor: colors.cream,
-    },
-
-    messageListContent: {
-        padding: spacing.md,
-        paddingTop: spacing.lg,
-    },
-
-    bubbleRow: {
-        flexDirection: "row",
-        alignItems: "flex-end",
-        marginBottom: spacing.md,
+const empty = StyleSheet.create({
+    root: {
+        marginTop: spacing.section * 2,
+        alignItems: "center",
+        paddingHorizontal: spacing.xxxl,
         gap: spacing.sm,
     },
-
-    bubbleRowRight: {
-        flexDirection: "row-reverse",
-    },
-
-    bubbleMaxWidth: {
-        maxWidth: "78%",
-    },
-
-    bubbleAvatar: {
-        width: 28,
-        height: 28,
-        borderRadius: radii.full,
-        backgroundColor: colors.creamMid,
-        borderWidth: 0.5,
-        borderColor: colors.border,
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-        marginBottom: spacing.xs,
-    },
-
-    bubbleAvatarBot: {
-        backgroundColor: colors.goldPale,
-        borderColor: colors.borderGold,
-    },
-
-    bubbleAvatarText: {
-        fontSize: typography.sizes.xs,
-        color: colors.charcoalMid,
-    },
-
-    // Proof image in chat
-    proofImageContainer: {
+    emoji: {
+        fontSize: 40,
         marginBottom: spacing.sm,
-        borderRadius: radii.sm,
-        overflow: "hidden",
-        borderWidth: 0.5,
-        borderColor: colors.border,
     },
-
-    proofImage: {
-        width: "100%",
-        height: 160,
+    heading: {
+        fontFamily: typography.fonts.sansBold,
+        fontSize: typography.sizes.xl,
+        color: colors.charcoal,
     },
-
-    proofTapHint: {
+    body: {
         fontFamily: typography.fonts.sans,
-        fontSize: typography.sizes.xxs,
+        fontSize: typography.sizes.base,
         color: colors.charcoalLight,
         textAlign: "center",
-        paddingVertical: spacing.xs,
-        backgroundColor: colors.creamMid,
+        lineHeight: typography.sizes.base * 1.6,
     },
+});
 
-    timestamp: {
+// ─── Error state ──────────────────────────────────────────────────────────────
+
+function ErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <View style={err.root}>
+            <Text style={err.heading}>Something went wrong</Text>
+            <Text style={err.body}>We couldn't load your orders.</Text>
+            <Pressable onPress={onRetry} style={err.btn}>
+                <Text style={err.btnText}>Try again</Text>
+            </Pressable>
+        </View>
+    );
+}
+
+const err = StyleSheet.create({
+    root: {
+        marginTop: spacing.section * 2,
+        alignItems: "center",
+        gap: spacing.sm,
+        paddingHorizontal: spacing.xxxl,
+    },
+    heading: {
+        fontFamily: typography.fonts.sansBold,
+        fontSize: typography.sizes.lg,
+        color: colors.charcoal,
+    },
+    body: {
         fontFamily: typography.fonts.sans,
-        fontSize: typography.sizes.xxs,
+        fontSize: typography.sizes.base,
         color: colors.charcoalLight,
-        marginTop: spacing.xxs,
+        textAlign: "center",
     },
-
-    timestampUser: {
-        color: "rgba(250,247,242,0.6)",
-        textAlign: "right",
-    },
-
-    // Quick replies
-    quickReplyRow: {
-        flexDirection: "row",
-        gap: spacing.sm,
-        paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.md,
-        backgroundColor: colors.white,
-        borderTopWidth: 0.5,
-        borderTopColor: colors.border,
-    },
-
-    // Browse add-ons button
-    browseBtn: {
-        ...componentStyles.buttonGold,
-        marginHorizontal: spacing.lg,
-        marginBottom: spacing.sm,
-        marginTop: spacing.sm,
-    },
-
-    browseBtnText: {
-        ...componentStyles.buttonGoldText,
-    },
-
-    // Free text input
-    inputRow: {
-        flexDirection: "row",
-        gap: spacing.sm,
-        paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.md,
-        backgroundColor: colors.white,
-        borderTopWidth: 0.5,
-        borderTopColor: colors.border,
-        alignItems: "flex-end",
-    },
-
-    chatInput: {
-        ...componentStyles.input,
-        flex: 1,
-        maxHeight: 100,
-        paddingTop: spacing.sm,
-    },
-
-    sendBtn: {
-        backgroundColor: colors.creamMid,
-        borderRadius: radii.sm,
+    btn: {
+        marginTop: spacing.md,
+        paddingHorizontal: spacing.xl,
         paddingVertical: spacing.sm,
-        paddingHorizontal: spacing.md,
-        borderWidth: 0.5,
-        borderColor: colors.border,
-    },
-
-    sendBtnActive: {
-        backgroundColor: colors.charcoal,
+        borderRadius: radii.md,
+        borderWidth: 1,
         borderColor: colors.charcoal,
     },
-
-    sendBtnText: {
+    btnText: {
         fontFamily: typography.fonts.sansMedium,
         fontSize: typography.sizes.base,
-        color: colors.white,
+        color: colors.charcoal,
+    },
+});
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
+
+export default function OrdersScreen() {
+    const { data: orders, isLoading, isError, refetch } = useOrders();
+
+    return (
+        <ScreenWrapper scrollable={false} header={<NavBar title='Orders' showBackButton={false} />}>
+            <FlatList
+                data={isLoading ? ([1, 2, 3] as const) : (orders ?? [])}
+                keyExtractor={(item) => (isLoading ? String(item) : (item as Order).id)}
+                contentContainerStyle={screen.list}
+                showsVerticalScrollIndicator={false}
+                renderItem={({ item }) =>
+                    isLoading ? <OrderCardSkeleton /> : isError ? null : <OrderCard order={item as Order} />
+                }
+                ListEmptyComponent={isError ? <ErrorState onRetry={refetch} /> : <EmptyState />}
+            />
+        </ScreenWrapper>
+    );
+}
+
+const screen = StyleSheet.create({
+    list: {
+        padding: spacing.lg,
+        gap: spacing.md,
+        flexGrow: 1,
     },
 });

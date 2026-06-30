@@ -24,7 +24,7 @@ const icons = {
 
 export default function CustomTabBar(props: any) {
     const { state, navigation } = props;
-
+    // console.log(state.routes.map((r: any) => r.name));
     const insets = useSafeAreaInsets();
 
     return (

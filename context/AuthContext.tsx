@@ -115,7 +115,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     async function signOut() {
-        await signOutService();
+        try {
+            await signOutService();
+            // Navigation is handled reactively:
+            // signOutService clears the Supabase session → onAuthStateChange fires
+            // SIGNED_OUT → session becomes null → isAuthenticated becomes false
+            // → app/index.tsx <Redirect href='/login' /> takes effect automatically.
+        } catch (error) {
+            console.error("Sign out failed:", error);
+        }
     }
 
     const value = useMemo(
