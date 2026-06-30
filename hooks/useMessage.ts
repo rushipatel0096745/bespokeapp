@@ -18,14 +18,31 @@ export function useMessages(conversationId: string | undefined) {
         if (!conversationId) return;
 
         // Subscribe to realtime inserts
-        channelRef.current = subscribeToMessages(conversationId, (newMsg) => {
-            queryClient.setQueryData<Message[]>(["messages", conversationId], (prev) => {
-                if (!prev) return [newMsg];
-                // Deduplicate — optimistic message may already be in the list
-                const exists = prev.some((m) => m.id === newMsg.id);
-                return exists ? prev : [...prev, newMsg];
-            });
-        });
+        channelRef.current = subscribeToMessages(
+            conversationId,
+            // (newMsg) => {
+            //     queryClient.setQueryData<Message[]>(["messages", conversationId], (prev) => {
+            //         if (!prev) return [newMsg];
+            //         // Deduplicate — optimistic message may already be in the list
+            //         const exists = prev.some((m) => m.id === newMsg.id);
+            //         return exists ? prev : [...prev, newMsg];
+            //     });
+            // },
+            (newMsg) => {
+                queryClient.setQueryData<Message[]>(["messages", conversationId], (prev) => {
+                    if (!prev) return [newMsg];
+                    const exists = prev.some((m) => m.id === newMsg.id);
+                    if (exists) return prev;
+                    return [...prev, newMsg].sort((a, b) => (a?.sequence || 0) - (b?.sequence || 0));
+                });
+            },
+            (updatedMsg) => {
+                queryClient.setQueryData<Message[]>(["messages", conversationId], (prev) => {
+                    if (!prev) return prev;
+                    return prev.map((m) => (m.id === updatedMsg.id ? updatedMsg : m));
+                });
+            }
+        );
 
         return () => {
             if (channelRef.current) {

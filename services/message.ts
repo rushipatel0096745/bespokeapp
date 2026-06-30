@@ -1,8 +1,8 @@
 import { supabase } from "@/lib/supabase";
 import { RealtimeChannel } from "@supabase/supabase-js";
 
-export type SenderType = "customer" | "agent" | "system";
-export type MessageType = "text" | "image" | "system" | "proof";
+export type SenderType = "customer" | "designer" | "bot";
+export type MessageType = "text" | "image";
 
 export interface Message {
     id: string;
@@ -13,6 +13,7 @@ export interface Message {
     image_url: string | null;
     metadata: Record<string, unknown> | null;
     created_at: string;
+    sequence?: number;
 }
 
 // Fetch history — newest last, paginated via cursor (created_at)
@@ -21,7 +22,7 @@ export async function getMessages(conversationId: string, cursor?: string): Prom
         .from("messages")
         .select("*")
         .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true })
+        .order("sequence", { ascending: true })
         .limit(50);
 
     if (cursor) {
@@ -83,7 +84,11 @@ export async function sendImageMessage(conversationId: string, imageUri: string)
 }
 
 // Realtime subscription
-export function subscribeToMessages(conversationId: string, onMessage: (msg: Message) => void): RealtimeChannel {
+export function subscribeToMessages(
+    conversationId: string,
+    onInsert: (msg: Message) => void,
+    onUpdate: (msg: Message) => void
+): RealtimeChannel {
     return supabase
         .channel(`messages:${conversationId}`)
         .on(
@@ -94,9 +99,33 @@ export function subscribeToMessages(conversationId: string, onMessage: (msg: Mes
                 table: "messages",
                 filter: `conversation_id=eq.${conversationId}`,
             },
-            (payload) => onMessage(payload.new as Message)
+            (payload) => {
+                console.log(`Realtime insert received:`, payload);
+                onInsert(payload.new as Message);
+            }
         )
-        .subscribe();
+        .on(
+            "postgres_changes",
+            {
+                event: "UPDATE",
+                schema: "public",
+                table: "messages",
+                filter: `conversation_id=eq.${conversationId}`,
+            },
+            (payload) => {
+                console.log(`Realtime update received:`, payload);
+                onUpdate(payload.new as Message);
+            }
+        )
+        .subscribe((status, err) => {
+            if (status === "SUBSCRIBED") {
+                console.log(`Successfully subscribed to messages for conversation: ${conversationId}`);
+            } else if (status === "CHANNEL_ERROR") {
+                console.error(`Failed to subscribe to messages for conversation: ${conversationId}`, err);
+            } else {
+                console.log(`Subscription status for conversation ${conversationId}:`, status);
+            }
+        });
 }
 
 export function unsubscribeFromMessages(channel: RealtimeChannel) {

@@ -24,6 +24,7 @@ import { Product } from "@/types/Product";
 import { colors, typography, spacing, radii, shadows } from "@/theme/theme";
 import ScreenWrapper from "@/components/layout/ScreenWrapper";
 import NavBar from "@/components/layout/NavBar";
+import { CartSummaryBar } from "@/components/layout/CartSummaryBar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -309,6 +310,9 @@ export default function AddOnsScreen() {
     const [search, setSearch] = useState("");
     const [sort, setSort] = useState<SortKey>("default");
 
+    // HARDCODED TEMPORARY
+    const orderId = "95851c09-8011-4424-bb4a-ff594c8431b4";
+
     // ── Data ──────────────────────────────────────────────────────────────────
     const { data: products, isLoading, isError, refetch, isRefetching } = useProducts();
     const { items: basketItems, addItem, total: basketTotal } = useBasket();
@@ -366,7 +370,6 @@ export default function AddOnsScreen() {
                 scrollable={true}
                 header={
                     <>
-                        <StatusBar barStyle='light-content' backgroundColor={colors.charcoal} />
                         <NavBar
                             variant='logo'
                             subtitle='Add-ons'
@@ -450,7 +453,8 @@ export default function AddOnsScreen() {
                 />
             </View>
 
-            <BasketBar count={basketCount} total={basketTotal} onPress={() => router.push("/add-ons/basket")} />
+            {/* <BasketBar count={basketCount} total={basketTotal} onPress={() => router.push("/add-ons/basket")} /> */}
+            <CartSummaryBar orderId={orderId} />
         </ScreenWrapper>
     );
 }

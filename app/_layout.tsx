@@ -9,6 +9,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BasketProvider } from "@/hooks/useBasket";
+import { ToastProvider } from "@/components/layout/Toast";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -68,13 +69,15 @@ export default function RootLayout() {
             <AuthProvider>
                 <QueryClientProvider client={queryClient}>
                     <BasketProvider>
-                        {/* AuthGuard must be inside AuthProvider to access useAuth */}
-                        <AuthGuard />
-                        <Stack
-                            screenOptions={{
-                                headerShown: false,
-                            }}
-                        />
+                        <ToastProvider>
+                            {/* AuthGuard must be inside AuthProvider to access useAuth */}
+                            <AuthGuard />
+                            <Stack
+                                screenOptions={{
+                                    headerShown: false,
+                                }}
+                            />
+                        </ToastProvider>
                     </BasketProvider>
                 </QueryClientProvider>
             </AuthProvider>

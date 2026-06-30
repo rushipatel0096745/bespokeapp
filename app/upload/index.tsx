@@ -694,7 +694,7 @@ function SubmittingView({ progress }: { progress: string | null }) {
 
 // ─── Success view ─────────────────────────────────────────────────────────────
 
-function SuccessView() {
+function SuccessView({ orderId }: { orderId: string }) {
     return (
         <View style={styles.centeredBody}>
             <Text style={styles.successEmoji}>🎉</Text>
@@ -707,7 +707,7 @@ function SuccessView() {
                 label='Back to home'
                 variant='gold'
                 fullWidth
-                onPress={() => router.replace("/")}
+                onPress={() => router.replace(`/orders/${orderId}/chat`)}
                 style={styles.submitBtn}
             />
         </View>
@@ -735,7 +735,7 @@ export default function UploadScreen() {
             )}
             {step === "form" && <UploadForm hook={hook} />}
             {step === "submitting" && <SubmittingView progress={uploadProgress} />}
-            {step === "success" && <SuccessView />}
+            {step === "success" && <SuccessView orderId={orderNumber} />}
         </ScreenWrapper>
     );
 }

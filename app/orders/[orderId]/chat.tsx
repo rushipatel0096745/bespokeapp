@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from "react";
+import React, { useRef, useState, useCallback, useEffect } from "react";
 import {
     View,
     Text,
@@ -12,17 +12,27 @@ import {
     ActivityIndicator,
     Modal,
     useWindowDimensions,
+    Alert,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
+
 import * as ImagePicker from "expo-image-picker";
 
 import { useConversation } from "@/hooks/useConversation";
 import { useMessages } from "@/hooks/useMessage";
 import { useSendMessage } from "@/hooks/useSendMessage";
 import { Message } from "@/services/message";
+
 import ScreenWrapper from "@/components/layout/ScreenWrapper";
 import NavBar from "@/components/layout/NavBar";
 import { colors, typography, spacing, radii, shadows } from "@/theme/theme";
+
+type DateMarker = { type: "__date__"; label: string; id: string };
+type ListItem = Message | DateMarker;
+
+type ActionHandler = (action: string, message: Message) => void;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -122,14 +132,84 @@ const sysBubble = StyleSheet.create({
 
 // ── Text bubble ───────────────────────────────────────────────────────────────
 
-function TextBubble({ msg }: { msg: Message }) {
+function TextBubble({
+    msg,
+    onAction,
+    actionDisabled,
+}: {
+    msg: Message;
+    onAction: ActionHandler;
+    actionDisabled: boolean;
+}) {
     const isCustomer = msg.sender_type === "customer";
     const isOptimistic = msg.id.startsWith("optimistic-");
+    const action = msg.metadata?.action as string | undefined;
 
     return (
         <View style={[bubble.row, isCustomer && bubble.rowReverse]}>
             <View style={[bubble.bubble, isCustomer ? bubble.bubbleCustomer : bubble.bubbleAgent]}>
                 <Text style={[bubble.text, isCustomer ? bubble.textCustomer : bubble.textAgent]}>{msg.text}</Text>
+
+                {action === "proof_decision" && (
+                    <View style={bubble.ctaRow}>
+                        <Pressable
+                            style={[bubble.cta, bubble.ctaPrimary, actionDisabled && { opacity: 0.6 }]}
+                            onPress={() => onAction("approve_proof", msg)}
+                            disabled={actionDisabled}>
+                            <Text style={bubble.ctaText}>All OK</Text>
+                        </Pressable>
+                        <Pressable
+                            style={[bubble.cta, bubble.ctaSecondary, actionDisabled && { opacity: 0.6 }]}
+                            onPress={() => onAction("request_changes", msg)}
+                            disabled={actionDisabled}>
+                            <Text style={bubble.ctaTextSecondary}>Make Changes</Text>
+                        </Pressable>
+                    </View>
+                )}
+
+                {action === "upsell_offer" && (
+                    <View style={bubble.ctaRow}>
+                        <Pressable
+                            style={[bubble.cta, bubble.ctaPrimary, actionDisabled && { opacity: 0.6 }]}
+                            onPress={() => onAction("upsell_yes", msg)}
+                            disabled={actionDisabled}>
+                            <Text style={bubble.ctaText}>Yes Please</Text>
+                        </Pressable>
+                        <Pressable
+                            style={[bubble.cta, bubble.ctaSecondary, actionDisabled && { opacity: 0.6 }]}
+                            onPress={() => onAction("upsell_no", msg)}
+                            disabled={actionDisabled}>
+                            <Text style={bubble.ctaTextSecondary}>No Thanks</Text>
+                        </Pressable>
+                    </View>
+                )}
+
+                {action === "upsell_retry" && (
+                    <View style={bubble.ctaRow}>
+                        <Pressable
+                            style={[bubble.cta, bubble.ctaPrimary, actionDisabled && { opacity: 0.6 }]}
+                            onPress={() => onAction("upsell_retry_yes", msg)}
+                            disabled={actionDisabled}>
+                            <Text style={bubble.ctaText}>OK, YES!</Text>
+                        </Pressable>
+                        <Pressable
+                            style={[bubble.cta, bubble.ctaSecondary, actionDisabled && { opacity: 0.6 }]}
+                            onPress={() => onAction("upsell_retry_no", msg)}
+                            disabled={actionDisabled}>
+                            <Text style={bubble.ctaTextSecondary}>No Thank You!</Text>
+                        </Pressable>
+                    </View>
+                )}
+
+                {action === "browse_addons" && (
+                    <Pressable
+                        style={[bubble.cta, actionDisabled && { opacity: 0.6 }]}
+                        onPress={() => onAction("browse_addons", msg)}
+                        disabled={actionDisabled}>
+                        <Text style={bubble.ctaText}>Browse Add-Ons</Text>
+                    </Pressable>
+                )}
+
                 <Text
                     style={[
                         bubble.time,
@@ -142,12 +222,12 @@ function TextBubble({ msg }: { msg: Message }) {
         </View>
     );
 }
-
 // ── Image bubble ──────────────────────────────────────────────────────────────
 
 function ImageBubble({ msg, onPress }: { msg: Message; onPress: (uri: string) => void }) {
     const isCustomer = msg.sender_type === "customer";
     const isOptimistic = msg.id.startsWith("optimistic-");
+    if (!msg.image_url) return null;
 
     return (
         <View style={[bubble.row, isCustomer && bubble.rowReverse]}>
@@ -185,26 +265,46 @@ const imgBubble = StyleSheet.create({
 
 // ── Proof card ────────────────────────────────────────────────────────────────
 
-function ProofCard({ msg }: { msg: Message }) {
-    const proofUrl = msg.image_url;
-    const proofTitle = (msg.metadata?.title as string) ?? "Your proof is ready";
-    const proofNote = (msg.metadata?.note as string) ?? "Please review and let us know.";
+// function ProofCard({ msg, onPress }: { msg: Message; onPress: (uri: string) => void }) {
+//     const proofUrl = msg.image_url;
+//     const proofTitle = (msg.metadata?.title as string) ?? "Your proof is ready";
+//     const proofNote = (msg.metadata?.note as string) ?? "Please review and let us know.";
+
+//     return (
+//         <View style={proofCard.root}>
+//             {proofUrl && (
+//                 <Pressable onPress={() => onPress(proofUrl)}>
+//                     <Image source={{ uri: proofUrl }} style={proofCard.image} resizeMode='cover' />
+//                 </Pressable>
+//             )}
+//             <View style={proofCard.body}>
+//                 <Text style={proofCard.title}>{proofTitle}</Text>
+//                 <Text style={proofCard.note}>{proofNote}</Text>
+//                 <View style={proofCard.actions}>
+//                     <Pressable style={proofCard.btnApprove}>
+//                         <Text style={proofCard.btnApproveText}>✓ Approve</Text>
+//                     </Pressable>
+//                     <Pressable style={proofCard.btnChanges}>
+//                         <Text style={proofCard.btnChangesText}>Request Changes</Text>
+//                     </Pressable>
+//                 </View>
+//             </View>
+//         </View>
+//     );
+// }
+
+function ProofCard({ msg, onPress }: { msg: Message; onPress: (uri: string) => void }) {
+    if (!msg.image_url) return null;
 
     return (
-        <View style={proofCard.root}>
-            {proofUrl && <Image source={{ uri: proofUrl }} style={proofCard.image} resizeMode='cover' />}
-            <View style={proofCard.body}>
-                <Text style={proofCard.title}>{proofTitle}</Text>
-                <Text style={proofCard.note}>{proofNote}</Text>
-                <View style={proofCard.actions}>
-                    <Pressable style={proofCard.btnApprove}>
-                        <Text style={proofCard.btnApproveText}>✓ Approve</Text>
-                    </Pressable>
-                    <Pressable style={proofCard.btnChanges}>
-                        <Text style={proofCard.btnChangesText}>Request Changes</Text>
-                    </Pressable>
-                </View>
-            </View>
+        <View style={[proofCard.root, proofCard.alignLeft]}>
+            <Text style={proofCard.proofLabel}>Design Proof</Text>
+            <Pressable onPress={() => onPress(msg.image_url!)}>
+                <Image source={{ uri: msg.image_url }} style={proofCard.proofThumb} resizeMode='cover' />
+            </Pressable>
+            <Pressable style={proofCard.proofButton} onPress={() => onPress(msg.image_url!)}>
+                <Text style={proofCard.proofButtonText}>View Proof</Text>
+            </Pressable>
         </View>
     );
 }
@@ -272,11 +372,49 @@ const proofCard = StyleSheet.create({
         fontSize: typography.sizes.sm,
         color: colors.charcoal,
     },
+    alignLeft: {
+        alignSelf: "flex-start",
+    },
+    proofCard: {
+        marginVertical: 6,
+        marginHorizontal: 12,
+        padding: 10,
+        borderRadius: 14,
+        backgroundColor: "#FFFFFF",
+        borderWidth: 1,
+        borderColor: "#E5E5EA",
+        maxWidth: "80%",
+    },
+    proofLabel: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: "#6B6B70",
+        marginBottom: 8,
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+    },
+    proofThumb: {
+        width: "100%",
+        height: 220,
+        borderRadius: 10,
+    },
+    proofButton: {
+        marginTop: 10,
+        paddingVertical: 8,
+        borderRadius: 8,
+        backgroundColor: "#1A1A1A",
+        alignItems: "center",
+    },
+    proofButtonText: {
+        color: "#FFFFFF",
+        fontSize: 13,
+        fontWeight: "600",
+    },
 });
 
 // ─── Shared bubble styles ─────────────────────────────────────────────────────
 
-const MAX_BUBBLE_WIDTH = "78%";
+const MAX_BUBBLE_WIDTH = "80%";
 
 const bubble = StyleSheet.create({
     row: {
@@ -311,6 +449,41 @@ const bubble = StyleSheet.create({
     },
     textAgent: { color: colors.charcoalMid },
     textCustomer: { color: colors.white },
+    cta: {
+        marginTop: spacing.sm,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.xs,
+        borderRadius: radii.md,
+        backgroundColor: colors.charcoal,
+        alignSelf: "flex-start",
+    },
+    ctaRow: {
+        flexDirection: "row",
+        gap: spacing.xs,
+        marginTop: spacing.sm,
+    },
+    ctaPrimary: {
+        backgroundColor: colors.charcoal,
+        marginTop: 0,
+    },
+    ctaSecondary: {
+        backgroundColor: colors.white,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: colors.border,
+        marginTop: 0,
+    },
+    ctaText: {
+        fontSize: typography.sizes.xs,
+        fontFamily: typography.fonts.sans,
+        fontWeight: "600",
+        color: colors.white,
+    },
+    ctaTextSecondary: {
+        fontSize: typography.sizes.xs,
+        fontFamily: typography.fonts.sans,
+        fontWeight: "600",
+        color: colors.charcoalMid,
+    },
     time: {
         fontSize: typography.sizes.xxs,
         marginTop: spacing.xs / 2,
@@ -320,26 +493,28 @@ const bubble = StyleSheet.create({
     timeCustomer: { color: colors.goldLight, textAlign: "right" },
     timeFaded: { opacity: 0.5 },
 });
-
 // ─── Message renderer ─────────────────────────────────────────────────────────
 
 function MessageItem({
     item,
     onImagePress,
+    onAction,
+    actionDisabled,
 }: {
-    item: Message | { type: "__date__"; label: string; id: string };
+    item: Message;
     onImagePress: (uri: string) => void;
+    onAction: ActionHandler;
+    actionDisabled: boolean;
 }) {
-    if ("type" in item && item.type === "__date__") {
-        return <DateSeparator label={item.label} />;
+    if (item.sender_type === "designer" && item.message_type === "image") {
+        return <ProofCard msg={item} onPress={onImagePress} />;
     }
 
-    const msg = item as Message;
+    if (item.message_type === "image") {
+        return <ImageBubble msg={item} onPress={onImagePress} />;
+    }
 
-    if (msg.message_type === "system") return <SystemBubble text={msg.text ?? ""} />;
-    if (msg.message_type === "proof") return <ProofCard msg={msg} />;
-    if (msg.message_type === "image") return <ImageBubble msg={msg} onPress={onImagePress} />;
-    return <TextBubble msg={msg} />;
+    return <TextBubble msg={item} onAction={onAction} actionDisabled={actionDisabled} />;
 }
 
 // ─── Fullscreen image viewer ──────────────────────────────────────────────────
@@ -529,7 +704,22 @@ const skel = StyleSheet.create({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ChatScreen() {
-    const { orderId } = useLocalSearchParams<{ orderId: string }>();
+    const { orderId, conversationId: passedConversationId } = useLocalSearchParams<{
+        orderId: string;
+        conversationId?: string;
+    }>();
+    const router = useRouter();
+    const queryClient = useQueryClient();
+
+    useEffect(() => {
+        if (passedConversationId && orderId) {
+            queryClient.setQueryData(["conversation", orderId], {
+                id: passedConversationId,
+                order_id: orderId,
+                created_at: new Date().toISOString(),
+            });
+        }
+    }, [passedConversationId, orderId, queryClient]);
 
     const { data: conversation, isLoading: convLoading } = useConversation(orderId);
     const { data: rawMessages, isLoading: msgsLoading } = useMessages(conversation?.id);
@@ -537,6 +727,7 @@ export default function ChatScreen() {
 
     const listRef = useRef<FlatList>(null);
     const [viewerUri, setViewerUri] = useState<string | null>(null);
+    const [isActionLoading, setIsActionLoading] = useState(false);
 
     const isLoading = convLoading || msgsLoading;
     const messages = groupByDate(rawMessages ?? []);
@@ -545,6 +736,102 @@ export default function ChatScreen() {
     const handleContentSizeChange = useCallback(() => {
         listRef.current?.scrollToEnd({ animated: true });
     }, []);
+
+    // Central place every metadata.action routes through, regardless of
+    // which bubble type rendered it (text CTA, proof decision, etc).
+    const handleAction = useCallback<ActionHandler>(
+        async (action, message) => {
+            const conversationId = conversation?.id;
+            if (!conversationId) return;
+
+            try {
+                setIsActionLoading(true);
+
+                switch (action) {
+                    case "approve_proof":
+                        const { error: approveError } = await supabase.rpc("resolve_proof_decision", {
+                            p_conversation_id: conversationId,
+                            p_decision_message_id: message.id,
+                            p_decision: "approved",
+                        });
+                        if (approveError) throw approveError;
+                        break;
+                    case "request_changes":
+                        const { error: requestError } = await supabase.rpc("resolve_proof_decision", {
+                            p_conversation_id: conversationId,
+                            p_decision_message_id: message.id,
+                            p_decision: "changes_requested",
+                        });
+                        if (requestError) throw requestError;
+                        break;
+                    case "upsell_yes":
+                        const { error: uyError } = await supabase.rpc("resolve_upsell_offer", {
+                            p_conversation_id: conversationId,
+                            p_decision_message_id: message.id,
+                            p_decision: "yes",
+                        });
+                        if (uyError) throw uyError;
+                        break;
+                    case "upsell_no":
+                        const { error: unError } = await supabase.rpc("resolve_upsell_offer", {
+                            p_conversation_id: conversationId,
+                            p_decision_message_id: message.id,
+                            p_decision: "no",
+                        });
+                        if (unError) throw unError;
+                        break;
+                    case "upsell_retry_yes":
+                        const { error: uryError } = await supabase.rpc("resolve_upsell_retry", {
+                            p_conversation_id: conversationId,
+                            p_decision_message_id: message.id,
+                            p_decision: "yes",
+                        });
+                        if (uryError) throw uryError;
+                        break;
+                    case "upsell_retry_no":
+                        const { error: urnError } = await supabase.rpc("resolve_upsell_retry", {
+                            p_conversation_id: conversationId,
+                            p_decision_message_id: message.id,
+                            p_decision: "no",
+                        });
+                        if (urnError) throw urnError;
+                        break;
+                    case "browse_addons":
+                        router.push(`/order/${orderId}/addons`);
+                        return;
+                    default:
+                        if (__DEV__) console.warn("Unhandled chat action:", action, message.id);
+                        return;
+                }
+
+                // Invalidate messages query so the UI updates immediately
+                await queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+            } catch (err: any) {
+                console.error("Action error:", err);
+                Alert.alert("Error", err.message || "Failed to submit decision");
+            } finally {
+                setIsActionLoading(false);
+            }
+        },
+        [conversation, orderId, router, queryClient]
+    );
+
+    const renderItem = useCallback(
+        ({ item }: { item: ListItem }) => {
+            if ("type" in item && item.type === "__date__") {
+                return <DateSeparator label={item.label} />;
+            }
+            return (
+                <MessageItem
+                    item={item as Message}
+                    onImagePress={setViewerUri}
+                    onAction={handleAction}
+                    actionDisabled={isActionLoading}
+                />
+            );
+        },
+        [handleAction, isActionLoading]
+    );
 
     return (
         <ScreenWrapper scrollable={false} header={<NavBar variant='back' title='Conversation' />}>
@@ -559,8 +846,8 @@ export default function ChatScreen() {
                     <FlatList
                         ref={listRef}
                         data={messages}
-                        keyExtractor={(item) => ("id" in item ? item.id : item.id)}
-                        renderItem={({ item }) => <MessageItem item={item} onImagePress={setViewerUri} />}
+                        keyExtractor={(item) => item.id}
+                        renderItem={renderItem}
                         contentContainerStyle={screen.listContent}
                         onContentSizeChange={handleContentSizeChange}
                         showsVerticalScrollIndicator={false}

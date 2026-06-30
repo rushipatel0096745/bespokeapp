@@ -7,5 +7,7 @@ export function useConversation(orderId: string) {
         queryFn: () => getConversationByOrderId(orderId),
         enabled: !!orderId,
         staleTime: Infinity, // conversation ID never changes for an order
+        retry: 3,
+        retryDelay: 500,
     });
 }

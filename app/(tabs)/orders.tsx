@@ -342,7 +342,7 @@ const err = StyleSheet.create({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function OrdersScreen() {
-    const { data: orders, isLoading, isError, refetch } = useOrders();
+    const { data: orders, isLoading, isError, refetch, isRefetching } = useOrders();
 
     return (
         <ScreenWrapper scrollable={false} header={<NavBar title='Orders' showBackButton={false} />}>
@@ -355,10 +355,13 @@ export default function OrdersScreen() {
                     isLoading ? <OrderCardSkeleton /> : isError ? null : <OrderCard order={item as Order} />
                 }
                 ListEmptyComponent={isError ? <ErrorState onRetry={refetch} /> : <EmptyState />}
+                refreshing={isRefetching}
+                onRefresh={refetch}
             />
         </ScreenWrapper>
     );
 }
+
 
 const screen = StyleSheet.create({
     list: {
