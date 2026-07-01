@@ -278,8 +278,7 @@ function ErrorState({ message }: { message: string }) {
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 const ProductDetails = () => {
-    const { productSlug } = useLocalSearchParams<{ productSlug: string }>();
-    const orderId = "95851c09-8011-4424-bb4a-ff594c8431b4";
+    const { productSlug, orderId } = useLocalSearchParams<{ productSlug: string; orderId: string }>();
 
     const router = useRouter();
     const { showToast } = useToast();
@@ -361,7 +360,15 @@ const ProductDetails = () => {
                     variant='back'
                     title={product?.name ?? "Product details"}
                     rightElement={
-                        <BasketButton basketCount={basketCount} onPress={() => router.push(`/add-ons/cart`)} />
+                        <BasketButton
+                            basketCount={basketCount}
+                            onPress={() =>
+                                router.push({
+                                    pathname: `/add-ons/cart`,
+                                    params: { orderId },
+                                })
+                            }
+                        />
                     }
                 />
             }>

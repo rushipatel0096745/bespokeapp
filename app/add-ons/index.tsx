@@ -17,7 +17,7 @@ import {
     Pressable,
     Platform,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useProducts } from "@/hooks/useProduct";
 import { useBasket } from "@/hooks/useBasket";
 import { Product } from "@/types/Product";
@@ -88,12 +88,11 @@ function NavBar1({ basketCount }: { basketCount: number }) {
     );
 }
 
-function BasketButton({ basketCount }: { basketCount: number }) {
-    const router = useRouter();
+function BasketButton({ basketCount, onPress }: { basketCount: number; onPress: () => void }) {
     return (
         <TouchableOpacity
             style={styles.basketBtn}
-            onPress={() => router.push("/add-ons/basket")}
+            onPress={onPress}
             accessibilityRole='button'
             accessibilityLabel={`Basket, ${basketCount} items`}>
             <Text style={styles.basketIcon}>🛒</Text>
@@ -311,7 +310,9 @@ export default function AddOnsScreen() {
     const [sort, setSort] = useState<SortKey>("default");
 
     // HARDCODED TEMPORARY
-    const orderId = "95851c09-8011-4424-bb4a-ff594c8431b4";
+    // const orderId = "95851c09-8011-4424-bb4a-ff594c8431b4";
+
+    const { orderId } = useLocalSearchParams<{ orderId: string }>();
 
     // ── Data ──────────────────────────────────────────────────────────────────
     const { data: products, isLoading, isError, refetch, isRefetching } = useProducts();
@@ -349,7 +350,14 @@ export default function AddOnsScreen() {
             <ProductCard
                 product={item.product}
                 inBasket={isInBasket(item.product.id)}
-                onPress={() => router.push(`/add-ons/${item.product.slug}`)}
+                onPress={() =>
+                    router.push({
+                        pathname: `/add-ons/${item.product.slug}`,
+                        params: {
+                            orderId,
+                        },
+                    })
+                }
                 onAddToBasket={() =>
                     addItem({
                         productId: item.product.id,
@@ -374,7 +382,17 @@ export default function AddOnsScreen() {
                             variant='logo'
                             subtitle='Add-ons'
                             showBackButton={true}
-                            rightElement={<BasketButton basketCount={basketCount} />}
+                            rightElement={
+                                <BasketButton
+                                    basketCount={basketCount}
+                                    onPress={() =>
+                                        router.push({
+                                            pathname: `/add-ons/cart`,
+                                            params: { orderId },
+                                        })
+                                    }
+                                />
+                            }
                         />
                         <PromoBanner />
                     </>
@@ -398,7 +416,17 @@ export default function AddOnsScreen() {
                     variant='logo'
                     subtitle='Add-ons'
                     showBackButton={true}
-                    rightElement={<BasketButton basketCount={basketCount} />}
+                    rightElement={
+                        <BasketButton
+                            basketCount={basketCount}
+                            onPress={() =>
+                                router.push({
+                                    pathname: `/add-ons/cart`,
+                                    params: { orderId },
+                                })
+                            }
+                        />
+                    }
                 />
                 <ErrorState onRetry={refetch} />
             </SafeAreaView>
@@ -415,7 +443,17 @@ export default function AddOnsScreen() {
                         variant='logo'
                         subtitle='Add-ons'
                         showBackButton={true}
-                        rightElement={<BasketButton basketCount={basketCount} />}
+                        rightElement={
+                            <BasketButton
+                                basketCount={basketCount}
+                                onPress={() =>
+                                    router.push({
+                                        pathname: `/add-ons/cart`,
+                                        params: { orderId },
+                                    })
+                                }
+                            />
+                        }
                     />
                     <PromoBanner />
                 </>

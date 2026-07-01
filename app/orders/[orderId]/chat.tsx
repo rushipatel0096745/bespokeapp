@@ -797,7 +797,12 @@ export default function ChatScreen() {
                         if (urnError) throw urnError;
                         break;
                     case "browse_addons":
-                        router.push(`/order/${orderId}/addons`);
+                        router.push({
+                            pathname: "/add-ons",
+                            params: {
+                                orderId,
+                            },
+                        });
                         return;
                     default:
                         if (__DEV__) console.warn("Unhandled chat action:", action, message.id);

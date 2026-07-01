@@ -110,8 +110,8 @@ function CartItemRow({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function CartScreen() {
-    // const { orderId } = useLocalSearchParams<{ orderId: string }>();
-    const orderId = "95851c09-8011-4424-bb4a-ff594c8431b4";
+    const { orderId } = useLocalSearchParams<{ orderId: string }>();
+    // const orderId = "95851c09-8011-4424-bb4a-ff594c8431b4";
 
     const router = useRouter();
 

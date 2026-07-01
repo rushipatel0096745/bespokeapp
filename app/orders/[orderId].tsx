@@ -16,6 +16,7 @@ import ScreenWrapper from "@/components/layout/ScreenWrapper";
 import NavBar from "@/components/layout/NavBar";
 import { colors, typography, spacing, radii, shadows } from "@/theme/theme";
 import { OrderWorkflowStage, ORDER_STATUS } from "../(tabs)/orders"; // re-use from list screen
+import { AddonOrdersSection } from "@/components/order/AddOnOrderSection";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -471,6 +472,8 @@ function OrderDetailContent({ order }: { order: OrderDetail }) {
                     </View>
                 </>
             )}
+
+            <AddonOrdersSection orderId={order.id} />
 
             <Divider />
 

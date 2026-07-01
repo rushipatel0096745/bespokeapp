@@ -86,11 +86,12 @@ export async function sendImageMessage(conversationId: string, imageUri: string)
 // Realtime subscription
 export function subscribeToMessages(
     conversationId: string,
+    mountId: string,
     onInsert: (msg: Message) => void,
     onUpdate: (msg: Message) => void
 ): RealtimeChannel {
     return supabase
-        .channel(`messages:${conversationId}`)
+        .channel(`messages:${conversationId}:${mountId}`)
         .on(
             "postgres_changes",
             {

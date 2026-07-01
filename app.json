@@ -18,7 +18,8 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.modernmumco"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -28,7 +29,13 @@
       "expo-secure-store",
       "expo-font",
       "expo-splash-screen",
-      "@stripe/stripe-react-native"
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.modernmumco",
+          "enableGooglePay": false
+        }
+      ]
     ]
   }
 }

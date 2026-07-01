@@ -695,6 +695,7 @@ function SubmittingView({ progress }: { progress: string | null }) {
 // ─── Success view ─────────────────────────────────────────────────────────────
 
 function SuccessView({ orderId }: { orderId: string }) {
+    console.log("orderId: ", orderId);
     return (
         <View style={styles.centeredBody}>
             <Text style={styles.successEmoji}>🎉</Text>

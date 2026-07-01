@@ -1,5 +1,15 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, TextInputProps, ViewStyle } from "react-native";
+import {
+    View,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    TextInputProps,
+    ViewStyle,
+    StyleProp,
+    TextStyle,
+} from "react-native";
 import { colors, typography, spacing, radii } from "../../theme/theme";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -8,6 +18,7 @@ interface InputProps extends Omit<TextInputProps, "style"> {
     label?: string;
     helperText?: string;
     errorText?: string;
+    style?: StyleProp<TextStyle>;
     /** Show a password visibility toggle */
     isPassword?: boolean;
     containerStyle?: ViewStyle;
@@ -24,6 +35,7 @@ export default function Input({
     isPassword = false,
     containerStyle,
     rightElement,
+    style,
     ...inputProps
 }: InputProps) {
     const [focused, setFocused] = useState(false);
@@ -40,7 +52,7 @@ export default function Input({
                     {...inputProps}
                     secureTextEntry={isPassword ? hidden : false}
                     placeholderTextColor={colors.charcoalLight}
-                    style={styles.input}
+                    style={[styles.input, style]}
                     onFocus={(e) => {
                         setFocused(true);
                         inputProps.onFocus?.(e);

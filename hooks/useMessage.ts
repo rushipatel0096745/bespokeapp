@@ -6,6 +6,7 @@ import { RealtimeChannel } from "@supabase/supabase-js";
 export function useMessages(conversationId: string | undefined) {
     const queryClient = useQueryClient();
     const channelRef = useRef<RealtimeChannel | null>(null);
+    const mountIdRef = useRef(`${Date.now()}-${Math.random()}`); // unique per mount
 
     const query = useQuery({
         queryKey: ["messages", conversationId],
@@ -17,9 +18,16 @@ export function useMessages(conversationId: string | undefined) {
     useEffect(() => {
         if (!conversationId) return;
 
+        // Ensure previous channel is fully removed before creating new one
+        if (channelRef.current) {
+            unsubscribeFromMessages(channelRef.current);
+            channelRef.current = null;
+        }
+
         // Subscribe to realtime inserts
         channelRef.current = subscribeToMessages(
             conversationId,
+            mountIdRef.current,
             // (newMsg) => {
             //     queryClient.setQueryData<Message[]>(["messages", conversationId], (prev) => {
             //         if (!prev) return [newMsg];

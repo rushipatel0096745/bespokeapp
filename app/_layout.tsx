@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BasketProvider } from "@/hooks/useBasket";
 import { ToastProvider } from "@/components/layout/Toast";
+import { StripeProvider } from "@stripe/stripe-react-native";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -70,13 +71,15 @@ export default function RootLayout() {
                 <QueryClientProvider client={queryClient}>
                     <BasketProvider>
                         <ToastProvider>
-                            {/* AuthGuard must be inside AuthProvider to access useAuth */}
-                            <AuthGuard />
-                            <Stack
-                                screenOptions={{
-                                    headerShown: false,
-                                }}
-                            />
+                            <StripeProvider publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!}>
+                                {/* AuthGuard must be inside AuthProvider to access useAuth */}
+                                <AuthGuard />
+                                <Stack
+                                    screenOptions={{
+                                        headerShown: false,
+                                    }}
+                                />
+                            </StripeProvider>
                         </ToastProvider>
                     </BasketProvider>
                 </QueryClientProvider>

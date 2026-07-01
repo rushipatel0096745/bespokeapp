@@ -17,6 +17,7 @@ export const colors = {
     cream: "#FAF7F2",
     creamMid: "#F2EDE4",
     white: "#FFFFFF",
+    surface: "#f7f7f7",
 
     // Borders
     border: "#E8E0D4",
