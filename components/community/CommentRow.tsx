@@ -26,11 +26,19 @@ interface CommentRowProps {
     onDelete?: (commentId: string) => void;
     onReport?: (commentId: string) => void;
     onLongPress?: (comment: CommunityComment) => void;
+    onAuthorPress?: () => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function CommentRow({ comment, currentUserId, onDelete, onReport, onLongPress }: CommentRowProps) {
+export default function CommentRow({
+    comment,
+    currentUserId,
+    onDelete,
+    onReport,
+    onLongPress,
+    onAuthorPress,
+}: CommentRowProps) {
     const isOwn = comment.author_id === currentUserId;
     const authorName = [comment.author.first_name, comment.author.last_name].filter(Boolean).join(" ");
 
@@ -40,12 +48,14 @@ export default function CommentRow({ comment, currentUserId, onDelete, onReport,
             onLongPress={() => onLongPress?.(comment)}
             activeOpacity={0.75}
             delayLongPress={400}>
-            <AuthorAvatar
-                firstName={comment.author.first_name}
-                lastName={comment.author.last_name}
-                avatarUrl={comment.author.avatar_url}
-                size='sm'
-            />
+            <TouchableOpacity onPress={onAuthorPress} disabled={!onAuthorPress} activeOpacity={0.7}>
+                <AuthorAvatar
+                    firstName={comment.author.first_name}
+                    lastName={comment.author.last_name}
+                    avatarUrl={comment.author.avatar_url}
+                    size='sm'
+                />
+            </TouchableOpacity>
             <View style={styles.bubble}>
                 <View style={styles.bubbleHeader}>
                     <Text style={styles.authorName}>{authorName}</Text>

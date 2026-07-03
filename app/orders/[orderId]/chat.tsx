@@ -801,6 +801,7 @@ export default function ChatScreen() {
                             pathname: "/add-ons",
                             params: {
                                 orderId,
+                                conversationId
                             },
                         });
                         return;

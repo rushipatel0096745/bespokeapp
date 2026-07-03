@@ -1,13 +1,15 @@
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from "react-native";
 import React, { useCallback } from "react";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { colors, typography, spacing, radii, shadows } from "@/theme/theme";
 import ScreenWrapper from "@/components/layout/ScreenWrapper";
 import NavBar from "@/components/layout/NavBar";
 import { PostCard } from "@/components/community/PostCard";
-import { useFeed } from "@/hooks/useCommunity";
+import { useFeed, useToggleReaction } from "@/hooks/useCommunity";
 import { useAuth } from "@/context/AuthContext";
-import type { CommunityPost } from "@/types/Community";
+import type { CommunityPost, ReactionType } from "@/types/Community";
+import { useSavedPostIds, useToggleSave } from "@/hooks/useCommunity";
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
@@ -31,6 +33,51 @@ function FooterLoader() {
     );
 }
 
+// ─── Post row — isolated so each item owns its own mutation instance ──────────
+
+function PostRow({ item, currentUserId }: { item: CommunityPost; currentUserId: string | undefined }) {
+    const toggleReaction = useToggleReaction(item.id);
+    const toggleSave = useToggleSave(item.id);
+    const { data: savedIds } = useSavedPostIds(currentUserId);
+
+    const isSaved = savedIds?.has(item.id) ?? false;
+
+    const handleReact = useCallback(
+        (type: ReactionType) => {
+            if (!currentUserId) return;
+            toggleReaction.mutate({
+                authorId: currentUserId,
+                reactionType: type,
+                currentReaction: item.reactions.user_reaction,
+            });
+        },
+        [currentUserId, item.reactions.user_reaction, toggleReaction]
+    );
+
+    const handleSave = useCallback(() => {
+        if (!currentUserId) return;
+        toggleSave.mutate({ userId: currentUserId, isSaved });
+    }, [currentUserId, isSaved, toggleSave]);
+
+    return (
+        <PostCard
+            post={item}
+            currentUserId={currentUserId}
+            onPress={() => router.push(`/community/${item.id}`)}
+            onAuthorPress={() => {
+                if (item.author_id === currentUserId) {
+                    router.push("/profile");
+                } else {
+                    router.push(`/community/profile/${item.author_id}`);
+                }
+            }}
+            onReact={handleReact}
+            isSaved={isSaved}
+            onSave={handleSave}
+        />
+    );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function CommunityFeedScreen() {
@@ -47,17 +94,7 @@ export default function CommunityFeedScreen() {
     }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
     const renderPost = useCallback(
-        ({ item }: { item: CommunityPost }) => {
-            console.log(item.image_url);
-            return (
-                <PostCard
-                    post={item}
-                    currentUserId={currentUserId}
-                    onPress={() => router.push(`/community/${item.id}`)}
-                    onAuthorPress={() => router.push(`/community/profile/${item.author_id}`)}
-                />
-            );
-        },
+        ({ item }: { item: CommunityPost }) => <PostRow item={item} currentUserId={currentUserId} />,
         [currentUserId]
     );
 
@@ -98,7 +135,8 @@ export default function CommunityFeedScreen() {
                 activeOpacity={0.85}
                 accessibilityRole='button'
                 accessibilityLabel='Write a post'>
-                <Text style={styles.fabIcon}>✏️</Text>
+                <Ionicons name='create-outline' size={18} color={colors.charcoal} />
+                <Text style={styles.fabLabel}>Write a post</Text>
             </TouchableOpacity>
         </ScreenWrapper>
     );
@@ -155,17 +193,20 @@ const styles = StyleSheet.create({
     fab: {
         position: "absolute",
         bottom: 120,
-        // bottom: spacing.xxl,
         right: spacing.lg,
-        width: 52,
-        height: 52,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.xs,
+        paddingVertical: 14,
+        paddingHorizontal: spacing.lg,
         borderRadius: radii.full,
         backgroundColor: colors.gold,
-        alignItems: "center",
-        justifyContent: "center",
         ...shadows.nav,
     },
-    fabIcon: {
-        fontSize: 20,
+    fabLabel: {
+        fontFamily: typography.fonts.sansBold,
+        fontSize: typography.sizes.sm,
+        color: colors.charcoal,
+        letterSpacing: typography.letterSpacing.wide,
     },
 });

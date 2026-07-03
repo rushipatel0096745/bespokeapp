@@ -39,6 +39,18 @@ export async function getOrder(orderId: string) {
                 includes_presentation_box,
                 includes_affirmation_card
             ),
+            foil_colour:foil_colour_id (
+                id,
+                name
+            ),
+            frame_colour:frame_colour_id (
+                id,
+                name
+            ),
+            card_colour:card_colour_id (
+                id,
+                name
+            ),
             order_images (
                 id,
                 image_url,

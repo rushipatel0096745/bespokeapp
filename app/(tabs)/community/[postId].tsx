@@ -29,12 +29,14 @@ import {
 } from "@/hooks/useCommunity";
 import { useAuth } from "@/context/AuthContext";
 import type { CommunityComment } from "@/types/Community";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function PostDetailScreen() {
     const { postId } = useLocalSearchParams<{ postId: string }>();
     const { profile } = useAuth();
+    const inset = useSafeAreaInsets();
     const currentUserId = profile?.id;
 
     const { data: post, isLoading: postLoading } = usePost(postId, currentUserId);
@@ -170,7 +172,14 @@ export default function PostDetailScreen() {
             <PostCard
                 post={post}
                 currentUserId={currentUserId}
-                onAuthorPress={() => router.push(`/community/profile/${post.author_id}`)}
+                // onAuthorPress={() => router.push(`/community/profile/${post.author_id}`)}
+                onAuthorPress={() => {
+                    if (post.author_id === currentUserId) {
+                        router.push("/profile");
+                    } else {
+                        router.push(`/community/profile/${post.author_id}`);
+                    }
+                }}
                 onLongPress={isOwnPost ? handlePostLongPress : undefined}
                 showFullBody
                 onReact={(type) => {
@@ -198,27 +207,46 @@ export default function PostDetailScreen() {
             <KeyboardAvoidingView
                 style={styles.flex}
                 behavior={Platform.OS === "ios" ? "padding" : undefined}
-                keyboardVerticalOffset={0}>
+                // keyboardVerticalOffset={0}
+                keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}>
                 <FlatList
                     data={comments}
                     keyExtractor={(c) => c.id}
                     ListHeaderComponent={ListHeader}
                     renderItem={({ item }) => (
-                        <CommentRow comment={item} currentUserId={currentUserId} onLongPress={handleCommentLongPress} />
+                        // <CommentRow comment={item} currentUserId={currentUserId} onLongPress={handleCommentLongPress} />
+                        <CommentRow
+                            comment={item}
+                            currentUserId={currentUserId}
+                            onLongPress={handleCommentLongPress}
+                            // onAuthorPress={() => router.push(`/community/profile/${item.author_id}`)}
+                            onAuthorPress={() => {
+                                if (item.author_id === currentUserId) {
+                                    router.push("/profile");
+                                } else {
+                                    router.push(`/community/profile/${item.author_id}`);
+                                }
+                            }}
+                        />
                     )}
                     ListEmptyComponent={
                         commentsLoading ? (
                             <View style={styles.commentLoader}>
                                 <ActivityIndicator size='small' color={colors.gold} />
                             </View>
-                        ) : null
+                        ) : (
+                            <View style={styles.emptyComments}>
+                                <Text style={styles.emptyCommentsEmoji}>💬</Text>
+                                <Text style={styles.emptyCommentsText}>Be the first to comment</Text>
+                            </View>
+                        )
                     }
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
                 />
 
                 {/* Sticky comment input */}
-                <View style={styles.inputBar}>
+                <View style={[styles.inputBar, { paddingBottom: inset.bottom + 16 }]}>
                     <TextInput
                         ref={inputRef}
                         style={styles.commentInput}
@@ -276,6 +304,19 @@ const styles = StyleSheet.create({
         color: colors.charcoalLight,
         letterSpacing: 0.5,
         textTransform: "uppercase",
+    },
+    emptyComments: {
+        alignItems: "center",
+        paddingVertical: spacing.xxxl,
+        gap: spacing.sm,
+    },
+    emptyCommentsEmoji: {
+        fontSize: 32,
+    },
+    emptyCommentsText: {
+        fontFamily: typography.fonts.sans,
+        fontSize: typography.sizes.md,
+        color: colors.charcoalLight,
     },
     listContent: {
         paddingBottom: spacing.xl,

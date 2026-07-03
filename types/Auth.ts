@@ -23,6 +23,8 @@ export interface AuthContextType {
 
     loading: boolean;
 
+    profileLoading?: boolean;
+
     isAuthenticated: boolean;
 
     signIn(payload: SignInPayload): Promise<void>;

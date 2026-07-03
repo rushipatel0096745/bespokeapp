@@ -11,33 +11,33 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BasketProvider } from "@/hooks/useBasket";
 import { ToastProvider } from "@/components/layout/Toast";
 import { StripeProvider } from "@stripe/stripe-react-native";
+import { useNotifications } from "@/hooks/useNotifications";
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
 // ─── Auth Guard ───────────────────────────────────────────────────────────────
-// Sits inside AuthProvider so it can read auth state.
-// Watches isAuthenticated reactively and redirects from ANY screen,
-// covering the sign-out case where the user is deep inside the app.
 
 const AUTH_GROUP = "(auth)";
 
 function AuthGuard() {
-    const { isAuthenticated, loading, profile } = useAuth();
+    const { isAuthenticated, loading, profileLoading, profile } = useAuth();
     const segments = useSegments();
     const router = useRouter();
 
+    // Registers push token + sets up notification listeners when authenticated.
+    // Passes undefined when logged out so the hook skips registration cleanly.
+    useNotifications(profile?.id);
+
     useEffect(() => {
-        if (loading) return; // Wait until auth state is resolved
+        if (loading) return;
 
         const inAuthGroup = segments[0] === AUTH_GROUP;
 
         if (!isAuthenticated && !inAuthGroup) {
-            // Signed out but still inside the app → send to login
             router.replace("/login");
         } else if (isAuthenticated && inAuthGroup) {
-            // Already authenticated but on an auth screen → redirect in
             if (!profile?.completed_onboarding) {
                 router.replace("/onboarding");
             } else {
@@ -72,13 +72,8 @@ export default function RootLayout() {
                     <BasketProvider>
                         <ToastProvider>
                             <StripeProvider publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!}>
-                                {/* AuthGuard must be inside AuthProvider to access useAuth */}
                                 <AuthGuard />
-                                <Stack
-                                    screenOptions={{
-                                        headerShown: false,
-                                    }}
-                                />
+                                <Stack screenOptions={{ headerShown: false }} />
                             </StripeProvider>
                         </ToastProvider>
                     </BasketProvider>

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "702026535466",
+    "project_id": "bespoke-c5d31",
+    "storage_bucket": "bespoke-c5d31.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:702026535466:android:5d085f3e2fa47d57f8e953",
+        "android_client_info": {
+          "package_name": "com.modernmumco.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCl74_LRGnYzC0_qe0a8w1AiuPsns47UTo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

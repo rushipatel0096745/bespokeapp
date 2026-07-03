@@ -4,6 +4,7 @@ import { colors, typography, spacing, radii, shadows } from "@/theme/theme";
 import { AuthorAvatar } from "./AuthorAvatar";
 import { ReactionBar } from "./ReactionBar";
 import type { CommunityPost, ReactionType } from "@/types/Community";
+import { Ionicons } from "@expo/vector-icons";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,8 @@ interface PostCardProps {
     onLongPress?: () => void;
     // Pass true in post detail screen to show full body without truncation
     showFullBody?: boolean;
+    isSaved?: boolean;
+    onSave?: () => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -47,6 +50,8 @@ export function PostCard({
     onReact,
     onLongPress,
     showFullBody = false,
+    isSaved = false,
+    onSave,
 }: PostCardProps) {
     const authorName = [post.author.first_name, post.author.last_name].filter(Boolean).join(" ");
 
@@ -89,10 +94,29 @@ export function PostCard({
             {/* ── Footer: reactions + comment count ── */}
             <View style={styles.footer}>
                 <ReactionBar reactions={post.reactions} onReact={(type) => onReact?.(type)} disabled={!onReact} />
-                <TouchableOpacity style={styles.commentCount} onPress={onPress} activeOpacity={0.7} disabled={!onPress}>
-                    <Text style={styles.commentCountIcon}>💬</Text>
-                    <Text style={styles.commentCountText}>{post.comment_count > 0 ? post.comment_count : ""}</Text>
-                </TouchableOpacity>
+
+                <View style={styles.footerRight}>
+                    {/* Comment count */}
+                    <TouchableOpacity
+                        style={styles.commentCount}
+                        onPress={onPress}
+                        activeOpacity={0.7}
+                        disabled={!onPress}>
+                        <Text style={styles.commentCountIcon}>💬</Text>
+                        <Text style={styles.commentCountText}>{post.comment_count > 0 ? post.comment_count : ""}</Text>
+                    </TouchableOpacity>
+
+                    {/* Bookmark */}
+                    {onSave && (
+                        <TouchableOpacity onPress={onSave} activeOpacity={0.7} hitSlop={8} style={styles.bookmarkBtn}>
+                            <Ionicons
+                                name={isSaved ? "bookmark" : "bookmark-outline"}
+                                size={18}
+                                color={isSaved ? colors.gold : colors.charcoalLight}
+                            />
+                        </TouchableOpacity>
+                    )}
+                </View>
             </View>
         </TouchableOpacity>
     );
@@ -143,6 +167,14 @@ const styles = StyleSheet.create({
         height: 200,
         borderRadius: radii.md,
         backgroundColor: colors.creamMid,
+    },
+    footerRight: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.sm,
+    },
+    bookmarkBtn: {
+        padding: spacing.xs,
     },
     footer: {
         flexDirection: "row",

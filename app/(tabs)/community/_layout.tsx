@@ -13,7 +13,7 @@ export default function CommunityLayout() {
                 }}
             />
             <Stack.Screen name='[postId]' />
-            <Stack.Screen name='profile/[authorId]' />
+            {/* <Stack.Screen name='profile/[authorId]' /> */}
         </Stack>
     );
 }

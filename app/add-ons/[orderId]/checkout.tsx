@@ -7,6 +7,8 @@ import { colors, radii, spacing, typography, componentStyles } from "@/theme/the
 import ScreenWrapper from "@/components/layout/ScreenWrapper";
 import NavBar from "@/components/layout/NavBar";
 import { supabase } from "@/lib/supabase";
+import { useSendMessage } from "@/hooks/useSendMessage";
+import { sendTextMessage } from "@/services/message";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -110,9 +112,11 @@ function OrderSummary({ order }: { order: AddonOrder }) {
 type ScreenState = "initializing" | "ready" | "paying" | "success" | "error";
 
 export default function CheckoutScreen() {
-    const { orderId } = useLocalSearchParams<{ orderId: string }>();
+    const { orderId, conversationId } = useLocalSearchParams<{ orderId: string; conversationId: string }>();
     const router = useRouter();
     const { confirmPayment } = useStripe();
+
+    const { sendText, sendImage, isSending } = useSendMessage(conversationId ?? "");
 
     const [screenState, setScreenState] = useState<ScreenState>("initializing");
     const [addonOrder, setAddonOrder] = useState<AddonOrder | null>(null);
@@ -226,16 +230,44 @@ export default function CheckoutScreen() {
         );
     }
 
+    // if (screenState === "success" && addonOrder) {
+    //     return (
+    //         <ScreenWrapper scrollable={false} header={<NavBar variant='back' title='Checkout' />}>
+    //             <SuccessState
+    //                 orderNumber={addonOrder.order_number}
+    //                 // onDone={() => router.replace(`/orders/${orderId}`)}
+    //                 onDone={() => {
+    //                     router.dismissAll();
+    //                     router.replace("/orders");
+    //                     router.push(`/orders/${orderId}`);
+    //                 }}
+    //             />
+    //         </ScreenWrapper>
+    //     );
+    // }
+
     if (screenState === "success" && addonOrder) {
         return (
             <ScreenWrapper scrollable={false} header={<NavBar variant='back' title='Checkout' />}>
                 <SuccessState
                     orderNumber={addonOrder.order_number}
-                    // onDone={() => router.replace(`/orders/${orderId}`)}
-                    onDone={() => {
+                    onDone={async () => {
+                        if (conversationId) {
+                            // await sendText(`Add-on order placed! Order ID: ${addonOrder.order_number}`);
+                            await sendTextMessage(
+                                conversationId,
+                                `Add-on order placed! Order ID: ${addonOrder.order_number}`
+                            );
+                            await supabase.rpc("confirm_addon_order", {
+                                p_conversation_id: conversationId,
+                                p_addon_order_id: addonOrder.id,
+                            });
+                        }
+
                         router.dismissAll();
                         router.replace("/orders");
-                        router.push(`/orders/${orderId}`);
+                        router.push(`/orders/${orderId}/chat`);
+                        // router.push(`/orders/${orderId}`);
                     }}
                 />
             </ScreenWrapper>

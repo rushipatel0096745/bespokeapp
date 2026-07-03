@@ -36,8 +36,21 @@ interface OrderDetail {
     date_of_birth: string | null;
     print_type: "hand" | "foot" | "both";
     frame_colour_id: string | null;
+    frame_colour: {
+        id: string,
+        name: string,
+        image: string,
+    }
     foil_colour_id: string | null;
+    foil_colour: {
+        id: string,
+        name: string,
+    }
     card_colour_id: string | null;
+    card_colour: {
+        id: string,
+        name: string,
+    }
     special_instructions: string | null;
     submitted_at: string;
     kits: {
@@ -283,7 +296,7 @@ function ImageViewer({
                         <Image source={{ uri: item.image_url }} style={{ width, height }} resizeMode='contain' />
                     )}
                 />
-                <Pressable style={viewer.closeBtn} onPress={onClose}>
+                <Pressable style={viewer.closeBtn} hitSlop={20} onPress={onClose}>
                     <Text style={viewer.closeBtnText}>✕</Text>
                 </Pressable>
             </View>
@@ -294,14 +307,16 @@ function ImageViewer({
 const viewer = StyleSheet.create({
     closeBtn: {
         position: "absolute",
-        top: spacing.xxxl,
-        right: spacing.lg,
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        top: spacing.xxxl + 20,
+        right: spacing.lg + 0,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         backgroundColor: "rgba(0,0,0,0.5)",
         justifyContent: "center",
         alignItems: "center",
+        zIndex: 99999,
+        elevation: 99999,
     },
     closeBtnText: {
         color: colors.white,
@@ -374,6 +389,7 @@ export default function OrderScreen() {
     const router = useRouter();
     const { orderId } = useLocalSearchParams<{ orderId: string }>();
     const { data: order, isLoading, isError } = useOrder(orderId);
+    console.log(order)
 
     return (
         <ScreenWrapper scrollable header={<NavBar variant='back' title='Order Details' />}>
@@ -430,12 +446,12 @@ function OrderDetailContent({ order }: { order: OrderDetail }) {
                     {dob && <SummaryRow label='Date of birth' value={dob} />}
                     <SummaryRow label='Print type' value={PRINT_TYPE_LABELS[order.print_type] ?? order.print_type} />
                     {/* Colour IDs — display as IDs until you join the colour tables */}
-                    {order.foil_colour_id && <SummaryRow label='Foil colour' value='See selection' />}
+                    {order.foil_colour_id && <SummaryRow label='Foil colour' value={order.foil_colour?.name || 'See selection'} />}
                     {order.frame_colour_id && kit.includes_frame && (
-                        <SummaryRow label='Frame colour' value='See selection' />
+                        <SummaryRow label='Frame colour' value={order.frame_colour?.name || 'See selection'} />
                     )}
                     {order.card_colour_id && kit.includes_affirmation_card && (
-                        <SummaryRow label='Card colour' value='See selection' />
+                        <SummaryRow label='Card colour' value={order.card_colour?.name || 'See selection'} />
                     )}
                 </View>
             </View>

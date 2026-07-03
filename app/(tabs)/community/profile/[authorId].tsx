@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { colors, typography, spacing, radii } from "@/theme/theme";
@@ -65,7 +65,7 @@ function ProfileHeader({ authorId, postCount }: { authorId: string; postCount: n
 
 export default function AuthorProfileScreen() {
     const { authorId } = useLocalSearchParams<{ authorId: string }>();
-    const { profile } = useAuth();
+    const { profile, loading: authLoading } = useAuth();
     const currentUserId = profile?.id;
 
     const { data: postCountData } = useAuthorPostCount(authorId);
@@ -79,9 +79,13 @@ export default function AuthorProfileScreen() {
 
     const isOwnProfile = authorId === currentUserId;
 
-    // ── Redirect own profile to the app profile screen ────────────────────────
-    // Uncomment this if you want own-profile taps to redirect:
-    // if (isOwnProfile) { router.replace("/profile"); return null; }
+    // useEffect(() => {
+    //     if (!authLoading && isOwnProfile) {
+    //         router.replace("/profile");
+    //     }
+    // }, [authLoading, isOwnProfile]);
+
+    // if (!authLoading && isOwnProfile) return null;
 
     const renderPost = ({ item }: { item: CommunityPost }) => (
         <PostCard
@@ -99,13 +103,13 @@ export default function AuthorProfileScreen() {
                 <NavBar
                     variant='back'
                     title=''
-                    rightElement={
-                        isOwnProfile ? (
-                            <TouchableOpacity onPress={() => router.push("/profile")} style={styles.editProfileBtn}>
-                                <Text style={styles.editProfileBtnText}>Edit profile</Text>
-                            </TouchableOpacity>
-                        ) : undefined
-                    }
+                    // rightElement={
+                    //     isOwnProfile ? (
+                    //         <TouchableOpacity onPress={() => router.push("/profile")} style={styles.editProfileBtn}>
+                    //             <Text style={styles.editProfileBtnText}>Edit profile</Text>
+                    //         </TouchableOpacity>
+                    //     ) : undefined
+                    // }
                 />
             }>
             {feedLoading ? (

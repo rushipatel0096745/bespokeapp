@@ -140,14 +140,14 @@ export default function ProfileScreen() {
                         icon='📦'
                         label='My orders'
                         sublabel='View all print submissions'
-                        onPress={() => router.push("/profile/orders")}
+                        onPress={() => router.push("/orders")}
                     />
                     <Divider />
                     <MenuRow
                         icon='🔖'
                         label='Saved posts'
                         sublabel='Bookmarked community content'
-                        onPress={() => router.push("/profile/saved")}
+                        onPress={() => router.push("/profile/saved-posts")}
                     />
                 </Card>
 
@@ -168,14 +168,10 @@ export default function ProfileScreen() {
                         icon='✉️'
                         label='Change email'
                         sublabel={profile?.email ?? undefined}
-                        onPress={() => router.push("/profile/change-email")}
+                        onPress={() => router.push("/change-email")}
                     />
                     <Divider />
-                    <MenuRow
-                        icon='🔒'
-                        label='Change password'
-                        onPress={() => router.push("/profile/change-password")}
-                    />
+                    <MenuRow icon='🔒' label='Change password' onPress={() => router.push("/change-password")} />
                 </Card>
 
                 {/* ── Log out ── */}

@@ -110,7 +110,7 @@ function CartItemRow({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function CartScreen() {
-    const { orderId } = useLocalSearchParams<{ orderId: string }>();
+    const { orderId, conversationId } = useLocalSearchParams<{ orderId: string; conversationId?: string }>();
     // const orderId = "95851c09-8011-4424-bb4a-ff594c8431b4";
 
     const router = useRouter();
@@ -155,7 +155,12 @@ export default function CartScreen() {
                         </View>
                         <TouchableOpacity
                             style={componentStyles.buttonGold}
-                            onPress={() => router.push(`/add-ons/${orderId}/checkout`)}
+                            onPress={() =>
+                                router.push({
+                                    pathname: `/add-ons/${orderId}/checkout` as any,
+                                    params: { conversationId },
+                                })
+                            }
                             activeOpacity={0.85}>
                             <Text style={componentStyles.buttonGoldText}>Proceed to checkout</Text>
                         </TouchableOpacity>

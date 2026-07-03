@@ -8,6 +8,7 @@ import type {
     ReactionSummary,
     FeedPage,
     ReportTargetType,
+    SavedPost,
 } from "@/types/Community";
 
 const FEED_PAGE_SIZE = 15;
@@ -297,6 +298,85 @@ async function reportTarget(
     if (error && error.code !== "23505") throw error;
 }
 
+// ── Add these functions to communityService.ts ────────────────────────────────
+
+// ─── fetchSavedPosts ──────────────────────────────────────────────────────────
+// Returns saved post rows newest-first, with post + author joined.
+
+async function fetchSavedPosts(userId: string): Promise<SavedPost[]> {
+    const { data, error } = await supabase
+        .from("community_saved_posts")
+        .select(
+            `
+            id,
+            created_at,
+            post:community_posts (
+                id,
+                body,
+                image_url,
+                created_at,
+                author:profiles!author_id (
+                    id,
+                    first_name,
+                    last_name,
+                    avatar_url,
+                    created_at
+                )
+            )
+        `
+        )
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    return (data ?? []).map((row: any) => ({
+        id: row.id,
+        saved_at: row.created_at,
+        post: {
+            id: row.post.id,
+            body: row.post.body,
+            image_url: row.post.image_url,
+            created_at: row.post.created_at,
+            author: row.post.author as CommunityAuthor,
+        },
+    }));
+}
+
+// ─── fetchSavedPostIds ────────────────────────────────────────────────────────
+// Lightweight — just the post IDs the user has saved.
+// Used to hydrate bookmark state across the feed without fetching full posts.
+
+async function fetchSavedPostIds(userId: string): Promise<string[]> {
+    const { data, error } = await supabase.from("community_saved_posts").select("post_id").eq("user_id", userId);
+
+    if (error) throw error;
+    return (data ?? []).map((row) => row.post_id);
+}
+
+// ─── savePost ─────────────────────────────────────────────────────────────────
+
+async function savePost(userId: string, postId: string): Promise<void> {
+    const { error } = await supabase.from("community_saved_posts").insert({ user_id: userId, post_id: postId });
+
+    // 23505 = unique violation — already saved, treat as success
+    if (error && error.code !== "23505") throw error;
+}
+
+// ─── unsavePost ───────────────────────────────────────────────────────────────
+
+async function unsavePost(userId: string, postId: string): Promise<void> {
+    const { error } = await supabase.from("community_saved_posts").delete().eq("user_id", userId).eq("post_id", postId);
+
+    if (error) throw error;
+}
+
+// ── Add to the communityService export object:
+// fetchSavedPosts,
+// fetchSavedPostIds,
+// savePost,
+// unsavePost,
+
 // ─── Export ───────────────────────────────────────────────────────────────────
 
 export const communityService = {
@@ -311,4 +391,8 @@ export const communityService = {
     fetchAuthorProfile,
     fetchAuthorPostCount,
     reportTarget,
+    fetchSavedPosts,
+    fetchSavedPostIds,
+    savePost,
+    unsavePost,
 };

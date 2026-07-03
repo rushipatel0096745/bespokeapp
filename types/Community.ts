@@ -58,3 +58,15 @@ export type FeedPage = {
     posts: CommunityPost[];
     nextCursor: string | null; // created_at of last post, null = no more pages
 };
+
+export type SavedPost = {
+    id: string; // community_saved_posts.id
+    saved_at: string; // created_at on the save row
+    post: {
+        id: string;
+        author: CommunityAuthor;
+        body: string;
+        image_url: string | null;
+        created_at: string;
+    };
+};

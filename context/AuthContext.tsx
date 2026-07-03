@@ -15,6 +15,7 @@ import type { Profile } from "../types/Profile";
 import type { AuthContextType, SignInPayload, SignUpPayload } from "../types/Auth";
 
 import { supabase } from "../lib/supabase";
+import { unregisterToken } from "@/hooks/useNotifications";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -116,7 +117,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     async function signOut() {
         try {
+            await unregisterToken(); // remove this device's token first
             await signOutService();
+            // await supabase.auth.signOut();
             // Navigation is handled reactively:
             // signOutService clears the Supabase session → onAuthStateChange fires
             // SIGNED_OUT → session becomes null → isAuthenticated becomes false

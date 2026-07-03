@@ -11,6 +11,8 @@ export const communityKeys = {
     comments: (postId: string) => ["community", "comments", postId] as const,
     author: (authorId: string) => ["community", "author", authorId] as const,
     authorPostCount: (authorId: string) => ["community", "author", authorId, "postCount"] as const,
+    savedPosts: (userId: string) => ["community", "saved", userId] as const,
+    savedPostIds: (userId: string) => ["community", "savedIds", userId] as const,
 };
 
 // ─── Feed ─────────────────────────────────────────────────────────────────────
@@ -267,5 +269,84 @@ export function useReportTarget() {
             targetId: string;
             reason?: string;
         }) => communityService.reportTarget(reporterId, targetType, targetId, reason),
+    });
+}
+
+// ─── Query keys (add to communityKeys object) ─────────────────────────────────
+//   savedPosts: (userId: string) => ["community", "saved", userId] as const,
+//   savedPostIds: (userId: string) => ["community", "savedIds", userId] as const,
+
+// ─── useSavedPostIds ──────────────────────────────────────────────────────────
+// Fetches just the post IDs the user has saved — used to drive bookmark icon
+// state across the feed without needing to refetch full posts.
+
+export function useSavedPostIds(userId: string | undefined) {
+    return useQuery({
+        queryKey: ["community", "savedIds", userId ?? ""],
+        enabled: !!userId,
+        queryFn: () => communityService.fetchSavedPostIds(userId!),
+        staleTime: 60_000,
+        // Convert to a Set for O(1) lookup in PostCard
+        select: (ids) => new Set(ids),
+    });
+}
+
+// ─── useSavedPosts ────────────────────────────────────────────────────────────
+
+export function useSavedPosts(userId: string | undefined) {
+    return useQuery({
+        queryKey: ["community", "saved", userId ?? ""],
+        enabled: !!userId,
+        queryFn: () => communityService.fetchSavedPosts(userId!),
+        staleTime: 30_000,
+    });
+}
+
+// ─── useToggleSave ────────────────────────────────────────────────────────────
+
+export function useToggleSave(postId: string) {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ userId, isSaved }: { userId: string; isSaved: boolean }) =>
+            isSaved ? communityService.unsavePost(userId, postId) : communityService.savePost(userId, postId),
+
+        onMutate: async ({ userId, isSaved }) => {
+            const idsKey = ["community", "savedIds", userId];
+            const savedKey = ["community", "saved", userId];
+
+            await queryClient.cancelQueries({ queryKey: idsKey });
+
+            const previousIds = queryClient.getQueryData<Set<string>>(idsKey);
+
+            // Update the ID set optimistically
+            queryClient.setQueryData<Set<string>>(idsKey, (old) => {
+                const next = new Set(old ?? []);
+                if (isSaved) {
+                    next.delete(postId);
+                } else {
+                    next.add(postId);
+                }
+                return next;
+            });
+
+            // Remove from saved list optimistically if unsaving
+            if (isSaved) {
+                queryClient.setQueryData<any[]>(savedKey, (old) => (old ?? []).filter((s) => s.post.id !== postId));
+            }
+
+            return { previousIds };
+        },
+
+        onError: (_err, { userId }, context) => {
+            if (context?.previousIds) {
+                queryClient.setQueryData(["community", "savedIds", userId], context.previousIds);
+            }
+        },
+
+        onSettled: (_data, _err, { userId }) => {
+            queryClient.invalidateQueries({ queryKey: ["community", "savedIds", userId] });
+            queryClient.invalidateQueries({ queryKey: ["community", "saved", userId] });
+        },
     });
 }

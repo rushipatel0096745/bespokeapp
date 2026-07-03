@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { forwardRef, useState } from "react";
 import {
     View,
     Text,
@@ -28,68 +28,65 @@ interface InputProps extends Omit<TextInputProps, "style"> {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function Input({
-    label,
-    helperText,
-    errorText,
-    isPassword = false,
-    containerStyle,
-    rightElement,
-    style,
-    ...inputProps
-}: InputProps) {
-    const [focused, setFocused] = useState(false);
-    const [hidden, setHidden] = useState(isPassword);
+const Input = forwardRef<TextInput, InputProps>(
+    ({ label, helperText, errorText, isPassword = false, containerStyle, rightElement, style, ...inputProps }, ref) => {
+        const [focused, setFocused] = useState(false);
+        const [hidden, setHidden] = useState(isPassword);
 
-    const hasError = !!errorText;
+        const hasError = !!errorText;
 
-    return (
-        <View style={[styles.wrapper, containerStyle]}>
-            {label && <Text style={styles.label}>{label}</Text>}
+        return (
+            <View style={[styles.wrapper, containerStyle]}>
+                {label && <Text style={styles.label}>{label}</Text>}
 
-            <View style={[styles.inputRow, focused && styles.focused, hasError && styles.errored]}>
-                <TextInput
-                    {...inputProps}
-                    secureTextEntry={isPassword ? hidden : false}
-                    placeholderTextColor={colors.charcoalLight}
-                    style={[styles.input, style]}
-                    onFocus={(e) => {
-                        setFocused(true);
-                        inputProps.onFocus?.(e);
-                    }}
-                    onBlur={(e) => {
-                        setFocused(false);
-                        inputProps.onBlur?.(e);
-                    }}
-                    accessibilityLabel={label}
-                    aria-invalid={hasError}
-                />
+                <View style={[styles.inputRow, focused && styles.focused, hasError && styles.errored]}>
+                    <TextInput
+                        ref={ref}
+                        {...inputProps}
+                        secureTextEntry={isPassword ? hidden : false}
+                        placeholderTextColor={colors.charcoalLight}
+                        style={[styles.input, style]}
+                        onFocus={(e) => {
+                            setFocused(true);
+                            inputProps.onFocus?.(e);
+                        }}
+                        onBlur={(e) => {
+                            setFocused(false);
+                            inputProps.onBlur?.(e);
+                        }}
+                        accessibilityLabel={label}
+                        aria-invalid={hasError}
+                    />
 
-                {/* Password toggle */}
-                {isPassword && (
-                    <TouchableOpacity
-                        onPress={() => setHidden((h) => !h)}
-                        accessibilityLabel={hidden ? "Show password" : "Hide password"}
-                        style={styles.suffix}>
-                        <Text style={styles.suffixText}>{hidden ? "Show" : "Hide"}</Text>
-                    </TouchableOpacity>
-                )}
+                    {/* Password toggle */}
+                    {isPassword && (
+                        <TouchableOpacity
+                            onPress={() => setHidden((h) => !h)}
+                            accessibilityLabel={hidden ? "Show password" : "Hide password"}
+                            style={styles.suffix}>
+                            <Text style={styles.suffixText}>{hidden ? "Show" : "Hide"}</Text>
+                        </TouchableOpacity>
+                    )}
 
-                {/* Custom right element (e.g. search icon) */}
-                {!isPassword && rightElement && <View style={styles.suffix}>{rightElement}</View>}
+                    {/* Custom right element (e.g. search icon) */}
+                    {!isPassword && rightElement && <View style={styles.suffix}>{rightElement}</View>}
+                </View>
+
+                {/* Helper / error text */}
+                {hasError ? (
+                    <Text style={styles.errorText} accessibilityRole='alert'>
+                        {errorText}
+                    </Text>
+                ) : helperText ? (
+                    <Text style={styles.helperText}>{helperText}</Text>
+                ) : null}
             </View>
+        );
+    }
+);
 
-            {/* Helper / error text */}
-            {hasError ? (
-                <Text style={styles.errorText} accessibilityRole='alert'>
-                    {errorText}
-                </Text>
-            ) : helperText ? (
-                <Text style={styles.helperText}>{helperText}</Text>
-            ) : null}
-        </View>
-    );
-}
+Input.displayName = "Input";
+export default Input;
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 

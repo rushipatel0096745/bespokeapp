@@ -278,7 +278,11 @@ function ErrorState({ message }: { message: string }) {
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 const ProductDetails = () => {
-    const { productSlug, orderId } = useLocalSearchParams<{ productSlug: string; orderId: string }>();
+    const { productSlug, orderId, conversationId } = useLocalSearchParams<{
+        productSlug: string;
+        orderId: string;
+        conversationId?: string;
+    }>();
 
     const router = useRouter();
     const { showToast } = useToast();
@@ -365,7 +369,7 @@ const ProductDetails = () => {
                             onPress={() =>
                                 router.push({
                                     pathname: `/add-ons/cart`,
-                                    params: { orderId },
+                                    params: { orderId, conversationId },
                                 })
                             }
                         />

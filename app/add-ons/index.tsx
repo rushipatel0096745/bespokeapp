@@ -25,6 +25,7 @@ import { colors, typography, spacing, radii, shadows } from "@/theme/theme";
 import ScreenWrapper from "@/components/layout/ScreenWrapper";
 import NavBar from "@/components/layout/NavBar";
 import { CartSummaryBar } from "@/components/layout/CartSummaryBar";
+import { useCart } from "@/hooks/useCart";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -173,14 +174,72 @@ function ProductCard({
     product,
     inBasket,
     onPress,
-    onAddToBasket,
+    // onAddToBasket,
 }: {
     product: Product;
     inBasket: boolean;
     onPress: () => void;
-    onAddToBasket: () => void;
+    // onAddToBasket: () => void;
 }) {
     return (
+        // <TouchableOpacity
+        //     style={styles.card}
+        //     onPress={onPress}
+        //     activeOpacity={0.85}
+        //     accessibilityRole='button'
+        //     accessibilityLabel={`${product.name}, ${formatPrice(product.price)}`}>
+        //     {/* Product image */}
+        //     <View style={styles.cardImageWrap}>
+        //         {product.image_url ? (
+        //             <Image
+        //                 source={{ uri: product.image_url }}
+        //                 style={styles.cardImage}
+        //                 resizeMode='cover'
+        //                 accessibilityLabel={product.name}
+        //             />
+        //         ) : (
+        //             <View style={styles.cardImagePlaceholder}>
+        //                 <Text style={styles.cardImagePlaceholderText}>✦</Text>
+        //             </View>
+        //         )}
+        //         {inBasket && (
+        //             <View style={styles.inBasketBadge}>
+        //                 <Text style={styles.inBasketText}>In basket</Text>
+        //             </View>
+        //         )}
+        //     </View>
+
+        //     {/* Product info */}
+        //     <View style={styles.cardBody}>
+        //         <Text style={styles.cardCategory}>{product.category}</Text>
+        //         <Text style={styles.cardName} numberOfLines={2}>
+        //             {product.name}
+        //         </Text>
+        //         {product.description && (
+        //             <Text style={styles.cardDescription} numberOfLines={2}>
+        //                 {product.description}
+        //             </Text>
+        //         )}
+
+        //         <View style={styles.cardFooter}>
+        //             <Text style={styles.cardPrice}>{formatPrice(product.price)}</Text>
+        //             <TouchableOpacity
+        //                 style={[styles.addBtn, inBasket && styles.addBtnAdded]}
+        //                 onPress={(e) => {
+        //                     e.stopPropagation?.();
+        //                     onAddToBasket();
+        //                 }}
+        //                 activeOpacity={0.8}
+        //                 accessibilityRole='button'
+        //                 accessibilityLabel={inBasket ? "Added to basket" : `Add ${product.name} to basket`}>
+        //                 <Text style={[styles.addBtnText, inBasket && styles.addBtnTextAdded]}>
+        //                     {inBasket ? "✓ Added" : "+ Add"}
+        //                 </Text>
+        //             </TouchableOpacity>
+        //         </View>
+        //     </View>
+        // </TouchableOpacity>
+
         <TouchableOpacity
             style={styles.card}
             onPress={onPress}
@@ -201,11 +260,6 @@ function ProductCard({
                         <Text style={styles.cardImagePlaceholderText}>✦</Text>
                     </View>
                 )}
-                {inBasket && (
-                    <View style={styles.inBasketBadge}>
-                        <Text style={styles.inBasketText}>In basket</Text>
-                    </View>
-                )}
             </View>
 
             {/* Product info */}
@@ -222,19 +276,7 @@ function ProductCard({
 
                 <View style={styles.cardFooter}>
                     <Text style={styles.cardPrice}>{formatPrice(product.price)}</Text>
-                    <TouchableOpacity
-                        style={[styles.addBtn, inBasket && styles.addBtnAdded]}
-                        onPress={(e) => {
-                            e.stopPropagation?.();
-                            onAddToBasket();
-                        }}
-                        activeOpacity={0.8}
-                        accessibilityRole='button'
-                        accessibilityLabel={inBasket ? "Added to basket" : `Add ${product.name} to basket`}>
-                        <Text style={[styles.addBtnText, inBasket && styles.addBtnTextAdded]}>
-                            {inBasket ? "✓ Added" : "+ Add"}
-                        </Text>
-                    </TouchableOpacity>
+                    <Text style={styles.cardChevron}>›</Text>
                 </View>
             </View>
         </TouchableOpacity>
@@ -312,14 +354,16 @@ export default function AddOnsScreen() {
     // HARDCODED TEMPORARY
     // const orderId = "95851c09-8011-4424-bb4a-ff594c8431b4";
 
-    const { orderId } = useLocalSearchParams<{ orderId: string }>();
+    const { orderId, conversationId } = useLocalSearchParams<{ orderId: string; conversationId?: string }>();
 
     // ── Data ──────────────────────────────────────────────────────────────────
     const { data: products, isLoading, isError, refetch, isRefetching } = useProducts();
     const { items: basketItems, addItem, total: basketTotal } = useBasket();
+    const { data: cart } = useCart(orderId);
 
-    const basketCount = basketItems.reduce((sum, i) => sum + i.quantity, 0);
+    // const basketCount = basketItems.reduce((sum, i) => sum + i.quantity, 0);
     // const basketCount = 0;
+    const basketCount = cart?.items.reduce((sum, i) => sum + i.quantity, 0) ?? 0;
 
     const isInBasket = useCallback(
         (productId: string) => basketItems.some((i: any) => i.productId === productId),
@@ -355,18 +399,19 @@ export default function AddOnsScreen() {
                         pathname: `/add-ons/${item.product.slug}`,
                         params: {
                             orderId,
+                            conversationId,
                         },
                     })
                 }
-                onAddToBasket={() =>
-                    addItem({
-                        productId: item.product.id,
-                        name: item.product.name,
-                        price: item.product.price,
-                        imageUrl: item.product.image_url ?? undefined,
-                        quantity: 1,
-                    })
-                }
+                // onAddToBasket={() =>
+                //     addItem({
+                //         productId: item.product.id,
+                //         name: item.product.name,
+                //         price: item.product.price,
+                //         imageUrl: item.product.image_url ?? undefined,
+                //         quantity: 1,
+                //     })
+                // }
             />
         );
     };
@@ -746,7 +791,13 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
-        marginTop: "auto",
+        // marginTop: "auto",
+        marginTop: spacing.sm,
+    },
+    cardChevron: {
+        fontSize: 20,
+        color: colors.charcoalLight,
+        lineHeight: 22,
     },
     cardPrice: {
         fontFamily: typography.fonts.sansMedium,
