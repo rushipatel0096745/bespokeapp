@@ -11,6 +11,7 @@ import { AuthorAvatar } from "@/components/community/AuthorAvatar";
 import { useOrders } from "@/hooks/useOrders";
 import { useFeed } from "@/hooks/useCommunity";
 import { useAuth } from "@/context/AuthContext";
+import { useUnreadCount } from "@/hooks/useInAppNotifications";
 import { ORDER_STATUS, OrderWorkflowStage } from "../(tabs)/orders";
 import type { CommunityPost } from "@/types/Community";
 import { Ionicons } from "@expo/vector-icons";
@@ -204,6 +205,7 @@ const ACTIVE_STAGES: OrderWorkflowStage[] = [
 export default function HomeScreen() {
     const router = useRouter();
     const { profile } = useAuth();
+    const { data: unreadCount = 0 } = useUnreadCount(profile?.id);
 
     const { data: orders = [], isLoading: ordersLoading } = useOrders();
     const { data: feedData, isLoading: feedLoading } = useFeed(profile?.id);
@@ -222,7 +224,9 @@ export default function HomeScreen() {
                 <>
                     <NavBar
                         variant='logo'
-                        rightElement={<BellButton onPress={() => router.push("/notifications")} unread={false} />}
+                        rightElement={
+                            <BellButton onPress={() => router.push("/notifications")} unread={unreadCount > 0} />
+                        }
                     />
                     <PromoBanner text='Spend £40 or more and get 20% off!' />
                 </>
