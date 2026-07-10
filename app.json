@@ -34,7 +34,7 @@
         "@stripe/stripe-react-native",
         {
           "merchantIdentifier": "merchant.com.modernmumco",
-          "enableGooglePay": false
+          "enableGooglePay": true
         }
       ],
       [

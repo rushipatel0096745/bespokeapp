@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { CardField, useStripe, CardFieldInput } from "@stripe/stripe-react-native";
+import { useStripe } from "@stripe/stripe-react-native";
 
 import { colors, radii, spacing, typography, componentStyles } from "@/theme/theme";
 import ScreenWrapper from "@/components/layout/ScreenWrapper";
 import NavBar from "@/components/layout/NavBar";
 import { supabase } from "@/lib/supabase";
-import { useSendMessage } from "@/hooks/useSendMessage";
 import { sendTextMessage } from "@/services/message";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -112,16 +111,12 @@ function OrderSummary({ order }: { order: AddonOrder }) {
 type ScreenState = "initializing" | "ready" | "paying" | "success" | "error";
 
 export default function CheckoutScreen() {
-    const { orderId, conversationId } = useLocalSearchParams<{ orderId: string; conversationId: string }>();
+    const { orderId, conversationId } = useLocalSearchParams<{ orderId: string; conversationId?: string }>();
     const router = useRouter();
-    const { confirmPayment } = useStripe();
-
-    const { sendText, sendImage, isSending } = useSendMessage(conversationId ?? "");
+    const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
     const [screenState, setScreenState] = useState<ScreenState>("initializing");
     const [addonOrder, setAddonOrder] = useState<AddonOrder | null>(null);
-    const [clientSecret, setClientSecret] = useState<string | null>(null);
-    const [cardDetails, setCardDetails] = useState<CardFieldInput.Details | null>(null);
     const [errorMessage, setErrorMessage] = useState<string>("");
 
     const initialize = useCallback(async () => {
@@ -129,7 +124,7 @@ export default function CheckoutScreen() {
             setScreenState("initializing");
             setErrorMessage("");
 
-            // Step 1: snapshot the cart into an addon_order
+            // Step 1: snapshot cart into addon_order
             const { data: rpcData, error: rpcError } = await supabase.rpc("create_addon_order_from_cart", {
                 p_order_id: orderId,
             });
@@ -138,7 +133,7 @@ export default function CheckoutScreen() {
 
             const order = rpcData as Omit<AddonOrder, "items">;
 
-            // Step 2: fetch the order items to display in the summary
+            // Step 2: fetch items for summary display
             const { data: items, error: itemsError } = await supabase
                 .from("addon_order_items")
                 .select("id, product_name, quantity, unit_price, line_total")
@@ -149,7 +144,7 @@ export default function CheckoutScreen() {
             const fullOrder: AddonOrder = { ...order, items: items ?? [] };
             setAddonOrder(fullOrder);
 
-            // Step 3: create a PaymentIntent via Edge Function
+            // Step 3: get Payment Sheet params from Edge Function
             const { data: sessionData } = await supabase.auth.getSession();
             const accessToken = sessionData.session?.access_token;
 
@@ -164,10 +159,47 @@ export default function CheckoutScreen() {
             });
 
             const json = await response.json();
-
             if (!response.ok) throw new Error(json.error ?? "Failed to create payment intent");
 
-            setClientSecret(json.client_secret);
+            // Step 4: initialise Payment Sheet
+            const { error: initError } = await initPaymentSheet({
+                merchantDisplayName: "Modern Mum Co",
+                returnURL: "modernmum://stripe-redirect",
+                customerId: json.customer,
+                customerEphemeralKeySecret: json.ephemeralKey,
+                paymentIntentClientSecret: json.paymentIntent,
+                allowsDelayedPaymentMethods: false,
+                defaultBillingDetails: { address: { country: "US" } },
+                appearance: {
+                    colors: {
+                        primary: colors.gold,
+                        background: colors.white,
+                        componentBackground: colors.cream,
+                        componentBorder: colors.border,
+                        componentDivider: colors.border,
+                        primaryText: colors.charcoal,
+                        secondaryText: colors.charcoalLight,
+                        componentText: colors.charcoal,
+                        placeholderText: colors.charcoalLight,
+                    },
+                    shapes: {
+                        borderRadius: radii.md,
+                        borderWidth: 0.5,
+                    },
+                },
+                googlePay: {
+                    merchantCountryCode: "US",
+                    testEnv: true, // set to false in production
+                    currencyCode: "usd",
+                },
+                applePay: {
+                    merchantCountryCode: "US",
+                },
+            });
+            console.log("initPaymentSheet result:", JSON.stringify({ error: initError }));
+
+            if (initError) throw new Error(initError.message);
+
             setScreenState("ready");
         } catch (err: any) {
             console.error("Checkout init error:", err);
@@ -181,38 +213,28 @@ export default function CheckoutScreen() {
     }, [initialize]);
 
     async function handlePay() {
-        if (!clientSecret || !cardDetails?.complete) return;
+        if (screenState !== "ready") return;
 
-        try {
-            setScreenState("paying");
+        setScreenState("paying");
 
-            const { error: stripeError } = await confirmPayment(clientSecret, {
-                paymentMethodType: "Card",
-                paymentMethodData: { billingDetails: {} },
-            });
+        const { error } = await presentPaymentSheet();
 
-            if (stripeError) {
-                // User-facing Stripe errors (card declined, insufficient funds, etc.)
-                // are safe to show directly — Stripe's error messages are already
-                // user-friendly and don't expose internals.
-                setErrorMessage(stripeError.message ?? "Payment failed");
-                setScreenState("error");
+        if (error) {
+            if (error.code === "Canceled") {
+                // User dismissed the sheet — go back to ready
+                setScreenState("ready");
                 return;
             }
-
-            // Note: don't rely on this callback alone for order fulfillment.
-            // The stripe-webhook Edge Function is the source of truth and will
-            // update addon_orders.status to 'paid' independently of this.
-            setScreenState("success");
-        } catch (err: any) {
-            console.error("Payment error:", err);
-            setErrorMessage(err.message ?? "Payment failed");
+            setErrorMessage(error.message ?? "Payment failed");
             setScreenState("error");
+            return;
         }
+
+        // Payment succeeded — webhook will update order status
+        setScreenState("success");
     }
 
-    const isCardComplete = cardDetails?.complete ?? false;
-    const isPaying = screenState === "paying";
+    // ── Loading ───────────────────────────────────────────────────────────────
 
     if (screenState === "initializing") {
         return (
@@ -229,22 +251,6 @@ export default function CheckoutScreen() {
             </ScreenWrapper>
         );
     }
-
-    // if (screenState === "success" && addonOrder) {
-    //     return (
-    //         <ScreenWrapper scrollable={false} header={<NavBar variant='back' title='Checkout' />}>
-    //             <SuccessState
-    //                 orderNumber={addonOrder.order_number}
-    //                 // onDone={() => router.replace(`/orders/${orderId}`)}
-    //                 onDone={() => {
-    //                     router.dismissAll();
-    //                     router.replace("/orders");
-    //                     router.push(`/orders/${orderId}`);
-    //                 }}
-    //             />
-    //         </ScreenWrapper>
-    //     );
-    // }
 
     if (screenState === "success" && addonOrder) {
         return (
@@ -263,7 +269,7 @@ export default function CheckoutScreen() {
                                 p_addon_order_id: addonOrder.id,
                             });
                         }
-
+                        // this is something that i have never encountered in my life but now i totally depends on this thing which pretty much amazing if you think about it if you carefully see through
                         router.dismissAll();
                         router.replace("/orders");
                         router.push(`/orders/${orderId}/chat`);
@@ -280,32 +286,20 @@ export default function CheckoutScreen() {
                 {addonOrder && <OrderSummary order={addonOrder} />}
 
                 <View style={styles.paymentSection}>
-                    <Text style={styles.paymentTitle}>Payment details</Text>
-                    <Text style={styles.paymentSubtitle}>Your card details are handled securely by Stripe.</Text>
-
-                    <CardField
-                        postalCodeEnabled={false}
-                        style={styles.cardField}
-                        cardStyle={{
-                            backgroundColor: colors.white,
-                            textColor: colors.charcoal,
-                            placeholderColor: colors.charcoalLight,
-                            borderColor: colors.border,
-                            borderWidth: 0.5,
-                            borderRadius: radii.sm,
-                        }}
-                        onCardChange={(details) => setCardDetails(details)}
-                    />
+                    <Text style={styles.paymentTitle}>Payment</Text>
+                    <Text style={styles.paymentSubtitle}>
+                        Apple Pay, Google Pay, and cards accepted. Your payment is handled securely by Stripe.
+                    </Text>
                 </View>
             </ScrollView>
 
             <View style={styles.footer}>
                 <TouchableOpacity
-                    style={[componentStyles.buttonGold, (!isCardComplete || isPaying) && styles.buttonDisabled]}
+                    style={[componentStyles.buttonGold, screenState === "paying" && styles.buttonDisabled]}
                     onPress={handlePay}
-                    disabled={!isCardComplete || isPaying}
+                    disabled={screenState === "paying"}
                     activeOpacity={0.85}>
-                    {isPaying ? (
+                    {screenState === "paying" ? (
                         <ActivityIndicator color={colors.charcoal} />
                     ) : (
                         <Text style={componentStyles.buttonGoldText}>
@@ -317,6 +311,8 @@ export default function CheckoutScreen() {
         </ScreenWrapper>
     );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
     centered: {
@@ -428,7 +424,7 @@ const styles = StyleSheet.create({
         color: colors.charcoal,
     },
     paymentSection: {
-        gap: spacing.sm,
+        gap: spacing.xs,
     },
     paymentTitle: {
         fontFamily: typography.fonts.sansMedium,
@@ -439,10 +435,7 @@ const styles = StyleSheet.create({
         fontFamily: typography.fonts.sans,
         fontSize: typography.sizes.sm,
         color: colors.charcoalLight,
-    },
-    cardField: {
-        height: 50,
-        marginTop: spacing.xs,
+        lineHeight: typography.sizes.sm * 1.6,
     },
     footer: {
         borderTopWidth: StyleSheet.hairlineWidth,

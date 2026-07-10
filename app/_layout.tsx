@@ -71,7 +71,10 @@ export default function RootLayout() {
                 <QueryClientProvider client={queryClient}>
                     <BasketProvider>
                         <ToastProvider>
-                            <StripeProvider publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!}>
+                            <StripeProvider
+                                publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!}
+                                merchantIdentifier='merchant.com.modernmumco'
+                                urlScheme='modernmum'>
                                 <AuthGuard />
                                 <Stack screenOptions={{ headerShown: false }} />
                             </StripeProvider>
